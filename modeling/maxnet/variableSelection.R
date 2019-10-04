@@ -1,0 +1,70 @@
+###
+# preform a variable selection on the data 
+# 20190904
+# carver.dan1@gmail.com
+### 
+varaibleSelection <- function(species){
+  # subset predictor data and presence column 
+  varSelect <- bioValues %>% dplyr::select(-c(longitude,latitude ))
+  # remove all na from dataframe 
+  test2 <-complete.cases(varSelect)
+  varSelect <- varSelect[test2,]
+  # drop all column from bioValues set as well so the same data is used for maxnet modeling. 
+  bioValues <<- bioValues[test2,]
+  
+  # # #vsurf
+  # vsurf1 <- VSURF(x=xy_mxe , y=presenceAbsence , ntree = 2000 , parallel = TRUE)
+  vsurfThres <- VSURF_thres(x=bioValues[,1:26] , y=as.factor(bioValues$presence) ,
+                            ntree = 50 )
+  
+  
+  ###
+  #correlation matrix
+  ###
+  
+  # define predictor list based on Run
+  inputPredictors <- vsurfThres$varselect.thres
+  #
+  # # ordered predictors from our variable selection
+  predictors <- varSelect[,c(inputPredictors)]
+  # Calculate correlation coefficient matrix
+  correlation <-cor(predictors, method="pearson")
+  #change self correlation value
+  
+  # #define the list of top 15 predictors
+  varNames <- colnames(correlation)
+  #loop through the top 5 predictors to remove correlated varables.
+  for( i in 1:5){
+    print(i)
+    # Test for correlations with predictors
+    vars <- correlation[(i+1):nrow(correlation),i] > 0.7 | correlation[(i+1):nrow(correlation),i] < -0.7
+    # Select correlated values names
+    corVar <- names(which(vars == TRUE))
+    #test is any correlated variables exist
+    if(length(corVar) >0 ){
+      # loop through the list of correlated variables
+      for(j in corVar){
+        # remove varable name from variable list
+        varNames <- varNames[which(varNames != j)]
+        # remove row from correlation dataframe ### Indexing on the this is not working at the moment. Leave out for the time being.
+        # correlation <- correlation[!vars,]
+        # print(dim(correlation))
+        print(paste0("the variable ", j, " was removed"))
+      }
+      
+    } else{
+      print("no correlated Varaibles")
+    }
+  }
+  
+  #create a dataframe of the top predictors and 
+  rankPredictors <- data.frame(matrix(nrow = length(colnames(correlation)),ncol = 3))
+  rankPredictors$varNames <- colnames(correlation)
+  rankPredictors$importance <- vsurfThres$imp.varselect.thres
+  rankPredictors$includeInFinal <- colnames(correlation) %in% varNames
+  rankPredictors <- rankPredictors[,4:6]
+  write.csv(x = rankPredictors, file = paste0(sp_dir, "/modeling/maxent/predictorImportance.csv"))
+  
+  variblesToModel <<- varSelect[,varNames]
+
+}

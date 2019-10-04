@@ -1,0 +1,262 @@
+---
+title: Summary of maxent modeling results and conservation gap analysis results per taxon
+author: Colin Khoury, Daniel Carver
+output:
+  html_document:
+  code_folding: hide
+highlight: tango
+theme: yeti
+toc: no
+toc_depth: 4
+toc_float:
+  collapsed: yes
+smooth_scroll: yes
+---
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# function for flitering list based on character values
+include <- function (theList, toMatch){
+  matches <- unique (grep(paste(toMatch,collapse="|"),
+                          theList, value=TRUE))
+  return(matches)
+}
+```
+
+## Summary of the models for `r species`.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# taxa is the
+
+baseDir <- paste0(sp_dir)
+csv <- list.files(baseDir, pattern = ".csv", recursive = TRUE , full.names = TRUE)
+if (file.exists(paste0(baseDir,'/counts.csv'))){
+  counts <- as.data.frame(read.csv(paste0(baseDir,'/counts.csv'))) %>%
+    dplyr::select(c("totalRecords", "totalUseful", "totalGRecords", "totalGUseful","totalHRecords", "totalHUseful"))
+}else{
+  print("There are no samples present for this species")
+}
+
+```
+<br>
+<br>
+<br>
+
+### Evaluation metrics
+The modeling process was run with 10 replicates to attempt to account for random variation occuring in this type of process. The table below shows the statistical results for the 10 runs.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  # evalMetric <- include(csvs,"eval_metrics_rep.csv")
+  DT::datatable(read.csv(include(csv,"eval_metrics_rep.csv")))
+}
+```
+<br>
+  <br>
+  <br>
+  
+#### Median value
+  The median result across the 10 replicates is shown below. Per previous articles we have done, to be considered an accurate and stable model, we are looking for an ATAUC >= 0.7; STAUC < 0.15; cAUC >= 0.4, and ASD15 <= 10
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  # evalMetric <- include(csvs,"eval_metrics_rep.csv")
+  DT::datatable(read.csv(include(csv,"eval_metrics.csv")))
+}
+```
+<br>
+<br>
+<br>
+  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  tif <- list.files(path = baseDir, pattern = '.tif', recursive = TRUE, full.names = TRUE)
+      median <- raster(include(tif, "prj_median"))
+      thrshold <- raster(include(tif, "spdist_thrsld"))
+      sd <- raster(include(tif, "prj_std"))
+    }
+tmap_mode("view")
+```
+
+### Maps of model outputs.
+
+
+#### Median
+
+Map of the median result from maxent models. Values in the key refer to probability of occurrence.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  tm_shape(median) + tm_raster()+
+    tm_shape(cleanPoints) + tm_dots()+
+    tm_scale_bar()
+}
+```
+
+<br>
+
+  
+#### Standard Deviation
+Map of the standard deviation result from maxent models
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  qtm(shp = sd)
+}
+```
+
+<br>
+  
+  
+#### Threshold
+Map of the threshold (binary presence-absence) result from maxent models. This is the final map we use for the subsequent conservation gap analysis.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  palette1 <- c(  "#FFFFFF","#45B320")
+  tm_shape(thrshold) + tm_raster(palette=palette1)+
+    tm_scale_bar()
+}
+```
+
+Map of the threshold (binary presence-absence) result from maxent models.
+
+  
+### Conservation gap analysis
+  
+  
+#### Ex situ Conservation
+  
+The table below shows the ex situ conservation summary. SRS is a gross comparison of germplasm (G) and reference (H) records. GRS analyzes how comprehensively the G records cover the maxent model spatially. ERS analyzes how well the G records cover the maxent model with regard to ecosystems covered.
+All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final ex situ conservation score is called FCS and is a mean of the 3 ex situ conservation scores.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# exSummary <- include(csv, "exsitu/summary.csv")
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  tableEx <- dplyr::bind_cols(counts, read.csv(include(csv, "exsitu/summary.csv")))
+  tableEx <- tableEx[c(7,1,2,3,4,5,6,8,9,10, 11)]
+  DT::datatable(tableEx)
+}
+```
+<br>
+<br>
+<br>
+  
+  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  gapRaster <- raster(include(tif, "50"))
+  gapRaster[is.na(gapRaster)] <- 0
+
+  collgap1 <- thrshold + gapRaster
+  collgap1[which(collgap1[] == 0)] <- NA
+
+}
+```
+
+#### GRSex
+Map of the potential distribution, with previous germplasm collection points surrounded by a 50 km buffer overlaid. Only germplasm points are displayed on the map.
+
+Potential Distribution = 1
+
+Area Where samples have been collected = 2
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  gPoint <- cleanPoints[cleanPoints@data$type == "G",]
+  palette1 <- c("#45B320","#7570b3")
+  if(length(gPoint$X)>0){
+    tm_shape(collgap1) + tm_raster(palette=palette1)+
+      tm_shape(gPoint) + tm_dots()+
+      tm_scale_bar()
+  }else{
+    palette2 <- c(  "#FFFFFF","#45B320")
+    tm_shape(collgap1) + tm_raster(palette=palette2)+
+      tm_scale_bar()
+  }
+}
+```
+
+<br>
+<br>
+<br>
+  
+  
+  
+#### In Situ Conservation
+  
+The table below shows the in situ conservation summary.  GRS analyzes how comprehensively protected areas (WDPA database 2019) cover the maxent model spatially. ERS analyzes how well protected areas cover the maxent model with regard to ecosystems covered.
+All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final in situ conservation score is called FCS and is a mean of the 2 in situ conservation scores.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# inSummary <- include(csv, "insitu/summary.csv")
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  tableIn <- dplyr::bind_cols(counts, read.csv(include(csv, "insitu/summary.csv")))
+  tableIn <- tableIn[c(7,1,2,3,4,5,6,8,9,10)]
+  DT::datatable(tableIn)
+}
+```
+<br>
+<br>
+<br>
+  
+#### GRSin
+  
+Map of the potential distribution, with distribution occurring within existing protected areas (WDPA 2019) highlighted.
+
+Potential Distribution = 1
+
+Protected Lands within the Potential Distribution = 2
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  protectSDM[is.na(protectSDM)] <- 0
+
+  grsIn <- thrshold + protectSDM
+  grsIn[which(grsIn[] == 0)] <- NA
+  
+  tm_shape(grsIn) + tm_raster(palette = palette1)+
+    tm_scale_bar()
+}
+
+```
+<br>
+<br>
+<br>
+  
+#### Combined Summary
+This table shows the combined ex situ and in situ conservation metrics. FCSCmean is the final conservation score we have been using. We also categorize these scores (0-25 = high priority (HP) for further conservation work; 25-50 medium (MP); 50-75 low (LP); and 75-100 sufficiently conserved (SC)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# inSummary <- include(csv, "insitu/summary.csv")
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){                                 print("Models were not are to be ran on this species due to insufficent number of samples")
+  }else{
+tableCo<- dplyr::bind_cols(counts, read.csv(include(csv, "combined/fcs_combined.csv")))
+tableCo <- tableCo[c(7,1,2,3,4,5,6, 8,9,10,11,12,13,14,15)]
+                                                                                                                                                                          DT::datatable(tableCo)
+}
+```
+
+<br>
+<br>
+<br>
+                                                                                                                                                                          
