@@ -8,7 +8,7 @@
 #                       of G buffer (i.e. CA50) and of the presence/absence surface.
 
 #species <- species1
-ers_insitu <- function(species) {
+ers_exsitu <- function(species) {
   
   #load counts
   sp_counts <- read.csv(paste0(sp_dir,"/counts.csv"))
@@ -23,8 +23,8 @@ ers_insitu <- function(species) {
   #run only for spp with occ file
   if (sp_counts$totalGUseful == 0) {
     ers <- 0
-    gbuf_nclass <- 0
-    pa_nclass <- NA
+    ecoValsGLen <- NA
+    ecoValsAllPointsLen <- nrow(ecoVal)
   }else{
     
     #load g buffer 
@@ -40,22 +40,18 @@ ers_insitu <- function(species) {
     ecoValsGLen <- length(ecoValsG[!is.na(ecoValsG$ECO_ID),])
     
 
-    # extract values from ecoregions to points 
-    crs(protectSDM) <- crs(ecoReg)
-    ecoValsP <- sp::over(x = pPoints, y = ecoReg) %>% 
-      distinct(ECO_ID )%>%
-      filter(ECO_ID > 0)
-    
-    ecoValsPLen <<- length(ecoValsP[!is.na(ecoValsP$ECO_ID),])
-    
+    # number of ecoRegions present in all points 
+    ecoValsAllPointsLen <<- nrow(ecoVal)
     
     #calculate ERS
-    ers <- min(c(100, (ecoValsGLen/ecoValsPLen)*100))
-    }
-    #create data.frame with output
-    out_df <- data.frame(ID=species, SPP_N_ECO=ecoValsPLen, G_N_ECO=ecoValsGLen, ERS=ers)
-    write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/ers_result.csv",sep=""),row.names=F)
+    ers <- min(c(100, (ecoValsGLen/ecoValsAllPointsLen)*100))
+
     
+    }
+  #create data.frame with output
+  out_df <- data.frame(ID=species, SPP_N_ECO=ecoValsAllPointsLen, G_N_ECO=ecoValsGLen, ERS=ers)
+  write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/ers_result.csv",sep=""),row.names=F)
+  
     #return object
     return(out_df)
 }

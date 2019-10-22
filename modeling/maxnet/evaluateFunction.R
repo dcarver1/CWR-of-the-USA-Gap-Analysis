@@ -32,10 +32,12 @@ evaluate_function <- function(species){
   #############################
   
   evaluate_table_f <- data.frame(matrix(nrow = 1,ncol = 16))
-
+  evaluate_table_f[1,] <- colMeans(evaluate_table[,-10],na.rm = T)
+  colnames(evaluate_table_f) <- names(colMeans(evaluate_table[,-10],na.rm = T))
   #SP
-  evaluate_table_f$species <- as.character(species)
-  evaluate_table_f$STAUC<- as.numeric(sd(evaluate_table$AUCtrain,na.rm = T))
+  evaluate_table_f[,"species"]<- as.character(species)
+  evaluate_table_f[,"STAUC"]<- as.numeric(sd(evaluate_table$AUCtrain,na.rm = T))
+  colnames(evaluate_table_f)[1] <- "ATAUC"
   
   ####ASD15
   evaluate_table_f$ASD15 <- NA

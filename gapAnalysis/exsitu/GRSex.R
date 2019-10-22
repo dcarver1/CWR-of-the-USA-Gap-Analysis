@@ -12,27 +12,27 @@ grs_exsitu <- function(species) {
   
   if(sp_counts$totalGUseful < 1){
     grs <- 0
-    gBuffer_area <- 0
+    gBufferRas_area <- 0
     pa_spp_area <- NA
   }else{
   
   # load in ga50 and model outputs 
-  gBuffer <<- raster::raster(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))
-  cell_size<-area(gBuffer, na.rm=TRUE, weights=FALSE)
+  gBufferRas <<- raster::raster(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))
+  cell_size<-area(gBufferRas, na.rm=TRUE, weights=FALSE)
   cell_size<-cell_size[!is.na(cell_size)]
-  gBuffer_area<-length(cell_size)*median(cell_size)
+  gBufferRas_area<-length(cell_size)*median(cell_size)
 
-  pa_spp <<- raster(paste0(sp_dir,"/spdist_thrsld.tif"))
-  cell_size<-area(pa_spp, na.rm=TRUE, weights=FALSE)
-  cell_size<-cell_size[!is.na(cell_size)]
+  pa_spp <<- raster(paste0(sp_dir,"/modeling/spdist_thrsld.tif"))
+  cell_size<- area(pa_spp, na.rm=TRUE, weights=FALSE)
+  cell_size<- cell_size[!is.na(cell_size)]
   pa_spp_area <<-length(cell_size)*median(cell_size)
 
   #calculate GRS
-  grs <- min(c(100, gBuffer_area/pa_spp_area*100))
+  grs <- min(c(100, gBufferRas_area/pa_spp_area*100))
     } 
     
   #create data.frame with output
-  out_df <- data.frame(ID=species, SPP_AREA_km2=pa_spp_area, G_AREA_km2=gBuffer_area, GRS=grs)
+  out_df <- data.frame(ID=species, SPP_AREA_km2=pa_spp_area, G_AREA_km2=gBufferRas_area, GRS=grs)
   write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/grs_result.csv",sep=""),row.names=F)
     
   #return object

@@ -1,15 +1,13 @@
 
 
 evaluate_sdm_function <- function(species){
-  
-  if(!file.exists(paste0(sp_dir,"/","modeling/maxent","/","eval_metrics.csv"))){
     
     if(file.exists(paste0(sp_dir,"/","sdm.rds"))){
       
       cat("Loading sdm results!", "\n")
       
       sdm <<- readRDS(paste0(sp_dir,"/","sdm.rds"))
-      s# Extracting metrics for 5 replicates
+      # Extracting metrics for 5 replicates
       cat("Gathering replicate metrics  for: ", species, "\n")
       evaluate_table <<- metrics_function(species)
       #evaluate_table<-read.csv(paste0(sp_dir,"/","eval_metrics_rep.csv"),header=T)
@@ -18,12 +16,12 @@ evaluate_sdm_function <- function(species){
       cat("Thresholding using Max metrics  for: ", species, "\n")
       # thrsld <- as.numeric(mean(evaluate_table[,"Threshold"],na.rm=T))
       thrsld <- as.numeric(mean(evaluate_table[,"threshold_train"],na.rm=T))
-      if (!file.exists(paste0(sp_dir, "/spdist_thrsld.tif"))) {
+      if (!file.exists(paste0(sp_dir, "/modeling/spdist_thrsld.tif"))) {
         # spThrsld <- spMedian
         spThrsld <- raster(paste0(sp_dir,"/modeling/",species,"_prj_mean.tif"))
         spThrsld[which(spThrsld[] >= thrsld)] <- 1
         spThrsld[which(spThrsld[] < thrsld)] <- 0
-        raster::writeRaster(x = spThrsld, filename = paste0(sp_dir, "/modeling/spdist_thrsld.tif"))
+        raster::writeRaster(x = spThrsld, filename = paste0(sp_dir, "/modeling/spdist_thrsld.tif"),overwrite = TRUE)
       } else {
         spThrsld <- raster(paste0(sp_dir, "/modeling/spdist_thrsld.tif"))
       }
@@ -85,8 +83,6 @@ evaluate_sdm_function <- function(species){
         cat(paste(species," not modelled yet"),"\n")
       }
     }
-  } else {
-    cat("Evaluation already performed...SKIPPING!","\n")
-  }
+
   return(species)
 }

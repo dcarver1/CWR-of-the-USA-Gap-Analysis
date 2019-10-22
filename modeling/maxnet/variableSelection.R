@@ -11,6 +11,8 @@ varaibleSelection <- function(species){
   varSelect <- varSelect[test2,]
   # drop all column from bioValues set as well so the same data is used for maxnet modeling. 
   bioValues <<- bioValues[test2,]
+  write.csv(x = bioValues, file = paste0(sp_dir, "/modeling/maxent/bioValuesForPresencePoints.csv"))
+  
   
   # # #vsurf
   # vsurf1 <- VSURF(x=xy_mxe , y=presenceAbsence , ntree = 2000 , parallel = TRUE)
@@ -33,29 +35,45 @@ varaibleSelection <- function(species){
   
   # #define the list of top 15 predictors
   varNames <- colnames(correlation)
+  # empty list containing the variables tested 
+  varsTested <- c()
   #loop through the top 5 predictors to remove correlated varables.
   for( i in 1:5){
     print(i)
-    # Test for correlations with predictors
-    vars <- correlation[(i+1):nrow(correlation),i] > 0.7 | correlation[(i+1):nrow(correlation),i] < -0.7
-    # Select correlated values names
-    corVar <- names(which(vars == TRUE))
-    #test is any correlated variables exist
-    if(length(corVar) >0 ){
-      # loop through the list of correlated variables
-      for(j in corVar){
-        # remove varable name from variable list
-        varNames <- varNames[which(varNames != j)]
-        # remove row from correlation dataframe ### Indexing on the this is not working at the moment. Leave out for the time being.
-        # correlation <- correlation[!vars,]
-        # print(dim(correlation))
-        print(paste0("the variable ", j, " was removed"))
+    if(varNames[i] %in% varNames){
+      # add variable to the test list 
+      varsTested <- c(varsTested, varNames[i])
+      # Test for correlations with predictors
+      vars <- correlation[(i+1):nrow(correlation),i] > 0.7 | correlation[(i+1):nrow(correlation),i] < -0.7
+      # Select correlated values names
+      corVar <- names(which(vars == TRUE))
+      #test is any correlated variables exist
+      if(length(corVar) >0 ){
+        # loop through the list of correlated variables
+        for(j in corVar){
+          # remove varable name from variable list
+          varNames <- varNames[which(varNames != j)]
+          # remove row from correlation dataframe ### Indexing on the this is not working at the moment. Leave out for the time being.
+          # correlation <- correlation[!vars,]
+          # print(dim(correlation))
+          print(paste0("the variable ", j, " was removed"))
+        }
+        
       }
-      
-    } else{
-      print("no correlated Varaibles")
+    }else{
+      print("this variable has been removed already")
     }
   }
+  
+  # include all variables that were tested. 
+  for(p in varsTested){
+    if(p %in% varNames){
+    }else{
+      varNames <- c(varNames, p)
+    }
+  }# It's a little bit confusing why variable are being dropped after they area tested. Correlation
+  # should be the same in both directs. This is just a test to make sure it works. 
+  
   
   #create a dataframe of the top predictors and 
   rankPredictors <- data.frame(matrix(nrow = length(colnames(correlation)),ncol = 3))

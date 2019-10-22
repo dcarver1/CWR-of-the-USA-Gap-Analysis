@@ -47,15 +47,25 @@ The modeling process was run with 10 replicates to attempt to account for random
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("No models were produced for this species due to insufficent number of samples")
 }else{
   # evalMetric <- include(csvs,"eval_metrics_rep.csv")
   DT::datatable(read.csv(include(csv,"eval_metrics_rep.csv")))
 }
 ```
 <br>
-  <br>
-  <br>
+<br>
+<br>
+  
+#### Predictors Used in Modeling Process 
+Through our variable selection and ranking process and the removal of correlated variables only a selected number of the 26 total variables were used in the modeling process. The table belows shows all the variables in ranked order of importance and shows if they were used in the modeling process.   
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"predictorImportance.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  DT::datatable(read.csv(include(csv,"predictorImportance.csv")))
+}
+```
   
 #### Median value
   The median result across the 10 replicates is shown below. Per previous articles we have done, to be considered an accurate and stable model, we are looking for an ATAUC >= 0.7; STAUC < 0.15; cAUC >= 0.4, and ASD15 <= 10
@@ -81,6 +91,7 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
       median <- raster(include(tif, "prj_median"))
       thrshold <- raster(include(tif, "spdist_thrsld"))
       sd <- raster(include(tif, "prj_std"))
+      mess <- raster(include(tif, "messMapThres"))
     }
 tmap_mode("view")
 ```
@@ -132,44 +143,77 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 
 Map of the threshold (binary presence-absence) result from maxent models.
 
-  
-### Conservation gap analysis
-  
-  
-#### Ex situ Conservation
-  
-The table below shows the ex situ conservation summary. SRS is a gross comparison of germplasm (G) and reference (H) records. GRS analyzes how comprehensively the G records cover the maxent model spatially. ERS analyzes how well the G records cover the maxent model with regard to ecosystems covered.
-All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final ex situ conservation score is called FCS and is a mean of the 3 ex situ conservation scores.
+#### Mess Map 
+The Mess map showns below takes the threshold map above and limits it's extent to areas that fall with 10% of the ranges of values present for all all points of the top predictor. Areas with value 1 are locations that are extrapolated and should be viewed with more septicism then those areas with value 2. All areas with value 2 fall with the observered range of the occurence data. 
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-# exSummary <- include(csv, "exsitu/summary.csv")
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("Models were not are to be ran on this species due to insufficent number of samples")
 }else{
-  tableEx <- dplyr::bind_cols(counts, read.csv(include(csv, "exsitu/summary.csv")))
-  tableEx <- tableEx[c(7,1,2,3,4,5,6,8,9,10, 11)]
-  DT::datatable(tableEx)
+  palette1 <- c("#FFFFFF","#45B320","#7570b3")
+  mess[is.na(mess)] <-0 
+  messThres <- mess + thrshold 
+  tm_shape(messThres) + tm_raster(palette=palette1)+
+    tm_scale_bar()
+}
+```
+
+
+
+### Conservation gap analysis
+
+#### Ex situ Conservation
+
+The table below shows the ex situ conservation summary. SRSex is a gross comparison of germplasm (G) and reference (H) records. GRSex analyzes how comprehensively the G records cover the maxent model spatially. ERSex analyzes how well the G records cover the maxent model with regard to ecosystems covered. 
+All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final ex situ conservation score is called FCSex and is a mean of the three ex situ conservation scores.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# exSummary <- include(csv, "exsitu/summary.csv")
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("There are no G points present so this process could not be completed.")
+}else{
+tableEx <- dplyr::bind_cols(counts, read.csv(include(csv, "exsitu/summary.csv")))
+tableEx <- tableEx[c(7,1,2,3,4,5,6,8,9,10, 11)]
+names(tableEx) <- c("ID","totalRecords","totalUseful","totalGRecords", 
+                    "totalGUseful","totalHRecords","totalHUseful","SRS_ex", "GRS_ex","ERS_ex","FCS_ex")
+DT::datatable(tableEx)
 }
 ```
 <br>
 <br>
 <br>
-  
-  
+
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+if(counts$totalGUseful == 0){
+  print("There are no G points present so this process could not be completed.")
 }else{
-  gapRaster <- raster(include(tif, "50"))
-  gapRaster[is.na(gapRaster)] <- 0
-
+  # pull in all g points.
+  #No idea why this is not working, going back to old indexing
+  # %>%   filter(type == "G")
+  occList <- cleanPoints[which(cleanPoints$type == "G"),]
+  if(nrow(occList) != 0){
+      sp = sp::SpatialPoints(occList[,c("longitude", "latitude")])
+      gapRaster <- raster(include(tif, "ga50"))
+      collgap1 <- thrshold + gapRaster
+      sp = sp::SpatialPoints(occList[,c("longitude", "latitude")])
+  gapRaster <- raster(include(tif, "ga50"))
+  gapRaster2 <- raster(include(tif, "grs_pa_PAs_narea_areakm2"))
+  gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
   collgap1 <- thrshold + gapRaster
-  collgap1[which(collgap1[] == 0)] <- NA
+  GRSin <- thrshold + gapRaster2
 
+  }else{
+print("There are no G points present so this process could not be completed.")
+  } 
 }
+    
 ```
 
 #### GRSex
 Map of the potential distribution, with previous germplasm collection points surrounded by a 50 km buffer overlaid. Only germplasm points are displayed on the map.
+
+Areas of Native Range = 0
 
 Potential Distribution = 1
 
@@ -177,49 +221,62 @@ Area Where samples have been collected = 2
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("There are no G points present so this process could not be completed.")
 }else{
-  gPoint <- cleanPoints[cleanPoints@data$type == "G",]
-  palette1 <- c("#45B320","#7570b3")
-  if(length(gPoint$X)>0){
-    tm_shape(collgap1) + tm_raster(palette=palette1)+
-      tm_shape(gPoint) + tm_dots()+
-      tm_scale_bar()
+  if(nrow(occList) == 0){
+  print("There are no G points present so this process could not be completed.")
+  }else{ gPoint <- cleanPoints[cleanPoints@data$type == "G",]
+  palette1 <- c(  "#FFFFFF","#45B320","#7570b3")
+  if(length(gPoint@data)>0){
+    collgap1[is.na(collgap1)]<-0
+    comb2 <-  collgap1 + thrshold
+  tm_shape(comb2) + tm_raster(palette = palette1)+
+  tm_shape(gPoint) + tm_dots()+
+    tm_scale_bar()
   }else{
-    palette2 <- c(  "#FFFFFF","#45B320")
-    tm_shape(collgap1) + tm_raster(palette=palette2)+
-      tm_scale_bar()
+palette2 <- c(  "#FFFFFF","#45B320")
+tm_shape(collgap1) + tm_raster(palette=palette2)+
+    tm_scale_bar()
+    }
   }
 }
+
 ```
 
 <br>
 <br>
 <br>
-  
-  
-  
+
+
+
 #### In Situ Conservation
-  
-The table below shows the in situ conservation summary.  GRS analyzes how comprehensively protected areas (WDPA database 2019) cover the maxent model spatially. ERS analyzes how well protected areas cover the maxent model with regard to ecosystems covered.
-All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final in situ conservation score is called FCS and is a mean of the 2 in situ conservation scores.
+
+
+The table below shows the in situ conservation summary.  SRSin reports the proportion of occurrences which fall within protected areas (WDPA database 2019). GRSin analyzes how comprehensively protected areas cover the maxent model spatially. ERSin analyzes how well protected areas cover the maxent model with regard to ecosystems covered. 
+All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final in situ conservation score is called FCSin and is a mean of the three in situ conservation scores.
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # inSummary <- include(csv, "insitu/summary.csv")
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were not able to be ran on this species due to insufficent number of samples")
 }else{
-  tableIn <- dplyr::bind_cols(counts, read.csv(include(csv, "insitu/summary.csv")))
-  tableIn <- tableIn[c(7,1,2,3,4,5,6,8,9,10)]
-  DT::datatable(tableIn)
+tableIn <- dplyr::bind_cols(counts, read.csv(include(csv, "insitu/summary.csv")))
+tableIn <- tableIn[c(7,1,2,3,4,5,6,8,9,10,11)]
+names(tableIn) <- c("ID","totalRecords","totalUseful","totalGRecords",
+                    "totalGUseful","totalHRecords","totalHUseful","SRS_in",
+                    "GRS_in","ERS_in","FCS_in")
+DT::datatable(tableIn)
 }
 ```
 <br>
 <br>
 <br>
-  
+
 #### GRSin
-  
+
 Map of the potential distribution, with distribution occurring within existing protected areas (WDPA 2019) highlighted.
+
+Areas of Native Range = 0
 
 Potential Distribution = 1
 
@@ -227,36 +284,38 @@ Protected Lands within the Potential Distribution = 2
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were not able to be ran on this species due to insufficent number of samples")
 }else{
-  protectSDM[is.na(protectSDM)] <- 0
 
-  grsIn <- thrshold + protectSDM
-  grsIn[which(grsIn[] == 0)] <- NA
-  
-  tm_shape(grsIn) + tm_raster(palette = palette1)+
-    tm_scale_bar()
+gapRaster2 <- raster(include(tif, "grs_pa_PAs_narea_areakm2"))
+      gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
+      if(file.exists(include(tif, "spdist_thrsld"))){
+        GRSin <- thrshold + gapRaster2
+        palette3 <- c(  "#FFFFFF","#45B320","#7570b3")
+tm_shape(GRSin) + tm_raster(palette = palette3)
+      }else{
+        print("Models were not able to be ran on this species due to insufficent number of samples")
+      }
 }
 
 ```
 <br>
 <br>
 <br>
-  
-#### Combined Summary
-This table shows the combined ex situ and in situ conservation metrics. FCSCmean is the final conservation score we have been using. We also categorize these scores (0-25 = high priority (HP) for further conservation work; 25-50 medium (MP); 50-75 low (LP); and 75-100 sufficiently conserved (SC)
+
+#### Combined Summary 
+This table shows the combined ex situ and in situ conservation metrics. FCSc-mean is the final combined conservation score. We categorize taxa based on the final combined scores (0-25 = high priority (HP) for further conservation work; 25-50 medium (MP); 50-75 low (LP); and 75-100 sufficiently conserved (SC)
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # inSummary <- include(csv, "insitu/summary.csv")
-if(length(include(csv,"eval_metrics_rep.csv")) == 0){                                 print("Models were not are to be ran on this species due to insufficent number of samples")
-  }else{
-tableCo<- dplyr::bind_cols(counts, read.csv(include(csv, "combined/fcs_combined.csv")))
-tableCo <- tableCo[c(7,1,2,3,4,5,6, 8,9,10,11,12,13,14,15)]
-                                                                                                                                                                          DT::datatable(tableCo)
+if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  tableCo<- dplyr::bind_cols(counts, read.csv(include(csv, "combined/fcs_combined.csv")))
+  tableCo <- tableCo[c(7,1,2,3,4,5,6, 8,9,10,11,12,13,14,15)]
+DT::datatable(tableCo)
 }
 ```
-
 <br>
 <br>
 <br>
-                                                                                                                                                                          

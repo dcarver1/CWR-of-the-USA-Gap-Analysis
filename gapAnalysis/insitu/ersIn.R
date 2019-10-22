@@ -3,32 +3,32 @@
 # 20190919
 # carver.dan1@gmail.com
 ###
-ers_exsitu <- function(species) {
-  #run only for spp with occ file
-  if (sp_counts$totalGUseful == 0) {
-    ers <- 0
-    gbuf_nclass <- 0
-    pa_nclass <- NA
-  }else{
-
+ers_insitu <- function(species) {
+  if(!file.exists(paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"))){
+    # mask protect area to native area 
+    proNative <- raster::mask(x = proArea,mask = nativeArea)
     # load in protected area maps and convert to points 
-    pPoints <- sp::SpatialPoints(raster::rasterToPoints(protectSDM))
+    protectPoints <- sp::SpatialPoints(raster::rasterToPoints(proNative))
     # extract values from ecoregions to points 
-    crs(pPoints) <- crs(ecoReg)
-    ecoValsP <- sp::over(x = pPoints, y = ecoReg) %>% 
-      distinct(ECO_ID )%>%
+    crs(protectPoints) <- crs(ecoReg)
+    ecoValsProt <- sp::over(x = protectPoints, y = ecoAreas) %>%
+      distinct(ECO_ID ) %>%
       filter(ECO_ID > 0)
+    #number of ecoRegions in protected areas 
+    ecoInProt <- nrow(ecoValsProt)
     
-    ecoValsProLen <- length(ecoValsP[!is.na(ecoValsP$ECO_ID),])
-    
- 
+    # number of ecoregion in the SDM 
+    ecoInSDM <- nrow(ecoVal)
+
     #calculate ERS
-    ers <- min(c(100, (ecoValsProLen/ecoValsPLen)*100))
+    ers <- min(c(100, (ecoInProt/ecoInSDM)*100))
+    #create data.frame with output
+    df <- data.frame(ID=species, SPP_N_ECO = ecoInSDM, SPP_WITHIN_PA_N_ECO = ecoInProt, ERS = ers)
+    write.csv(df,paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"),row.names=F)
+    #return object
+    return(df)
+  }else{
+    print("file exist, moving on")
   }
-  #create data.frame with output
-    df <- data.frame(ID=species, SPP_N_ECO = ecoValsPLen, SPP_WITHIN_PA_N_ECO = ecoValsProLen, ERS = ers)
-    write.csv(df,paste(sp_dir,"/gap_analysis/insitu/ers_result.csv",sep=""),row.names=F)
-  
-  #return object
-  return(df)
+
 }
