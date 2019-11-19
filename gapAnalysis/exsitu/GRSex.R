@@ -10,7 +10,7 @@
 #species <- species1
 grs_exsitu <- function(species) {
   
-  if(sp_counts$totalGUseful < 1){
+  if(!file.exists(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))){
     grs <- 0
     gBufferRas_area <- 0
     pa_spp_area <- NA

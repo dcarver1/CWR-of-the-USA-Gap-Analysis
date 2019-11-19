@@ -13,12 +13,12 @@ messMap <- function(species) {
   # use top predictor to select raster layer and clip that to native area 
   top1 <- as.character(topPre$varNames[1])
   
-  # determine range +/- 10% of top predictor 
+  # determine range +/- 1% of top predictor 
   vals1 <- dplyr::select(bioValue2, top1)
   r1 <- range(vals1)
-  diff <- (r1[2] - r1[1])*0.1
-  h1 <- r1[2] + diff
-  b1 <- r1[1] - diff 
+  #diff <- (r1[2] - r1[1])*0.01 # 20191031, dropping the buffer section for now. 
+  h1 <- r1[2] #+ diff
+  b1 <- r1[1] #- diff 
   
   # load in raster for top predictor 
   topRast <- rastersToModel%>%

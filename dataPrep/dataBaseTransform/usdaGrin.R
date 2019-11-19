@@ -8,16 +8,15 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrOfNA/occurrence_data2019_05_29/USDA_NPGS_GRINGlobal"
+base_dir <- "D:/cwrNA/occurrence_data2019_05_29/USDA_NPGS_GRINGlobal"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/USDA_CWRofUSA.csv")
 data <- data.table::fread(input = csvPath,header = TRUE)
 # Select necessary columns from dataset 
 dataThin <- data %>%
-  select("Taxon","accession_number", "country",
-        "latitude","longitude","environment_description",
-        "status_code")
+  select("Taxon","accession_number","status_code", "site_short_name","improvement_status_code",
+         "country", "latitude","longitude","formatted_locality")
 nr <- nrow(dataThin)
 
 # define structure of the empty dataframe 
@@ -34,6 +33,9 @@ df <- data.frame(taxon=character(nr),
                  country=character(nr),
                  iso3=character(nr),
                  localityInformation=character(nr),
+                 biologicalStatus = character(nr), 
+                 collectionSource = character(nr),
+                 finalOriginStat = character(nr),
                  stringsAsFactors=FALSE)
 
 # assign columns to location in empty dataframe
@@ -42,14 +44,35 @@ df$genus <- NA
 df$species <- NA
 df$latitude <- dataThin$latitude
 df$longitude <- dataThin$longitude
-df$databaseSource <- "USDA GRIn" 
-df$institutionCode <- NA
+df$databaseSource <- "USDA_NPGS_GRINGlobal" 
+df$institutionCode <- dataThin$site_short_name
 df$type <- NA
 df$uniqueID <- dataThin$accession_number
-df$sampleCategory <- dataThin$status_code
+df$sampleCategory <- as.character(dataThin$status_code)
 df$country <- dataThin$country
 df$iso3 <- NA
-df$localityInformation <- dataThin$environment_description
+df$localityInformation <- dataThin$formatted_locality
+df$biologicalStatus <- dataThin$improvement_status_code
+df$collectionSource <- NA
+df$finalOriginStat <- NA 
+
+# pull in checkSynomyn function and apply it 
+source(file="D:/cwrNA/src/dataPrep/dataBaseTransform/checkSynonymsFunction.R")
+df <- checkSynonym(df)
+
+# applying G or H value based on status category 
+
+for(i in 1:nrow(df)){
+  if(df$sampleCategory[i] =="INACTIVE"){
+    df$type[i] <- "H"
+  }else{
+    df$type[i] <- "G"
+  }
+}
+
+# filter out for only wild and unknow locations 
+df <- df[df$biologicalStatus %in% c("WILD","UNCERTAIN",""),]
+
 
 # Spilt name to get at genus and species 
 #test <- df[1:100,]

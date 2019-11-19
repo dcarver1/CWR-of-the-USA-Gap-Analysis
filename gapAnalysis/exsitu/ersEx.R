@@ -9,57 +9,54 @@
 
 #species <- species1
 ers_exsitu <- function(species) {
-  
-  #load counts
-  sp_counts <- read.csv(paste0(sp_dir,"/counts.csv"))
-  
-  #area of model clipped to native area
-  
-  # area of g points clipped to native area
-  
-  # number of ecoregions present in model 
-  
-  
-  #run only for spp with occ file
-  if (sp_counts$totalGUseful == 0) {
-    ers <- 0
-    ecoValsGLen <- NA
-    ecoValsAllPointsLen <- nrow(ecoVal)
-  }else{
+    #load counts
+    sp_counts <- read.csv(paste0(sp_dir,"/counts.csv"))
     
-    #load g buffer 
-    gBuffer <- raster::raster(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))
-    gBuffer[which(gBuffer[] == 0)] <- NA
-    gPoints <- sp::SpatialPoints(raster::rasterToPoints(gBuffer))
-    # extract values from ecoregions to points 
-    crs(gPoints) <- crs(ecoReg)
-    ecoValsG <- sp::over(x = gPoints, y = ecoReg) %>%
-      distinct(ECO_ID ) %>%
-      filter(ECO_ID > 0)
+    #area of model clipped to native area
     
-    ecoValsGLen <- length(ecoValsG[!is.na(ecoValsG$ECO_ID),])
+    # area of g points clipped to native area
     
-
-    # number of ecoRegions present in all points 
-    ecoValsAllPointsLen <<- nrow(ecoVal)
+    # number of ecoregions present in model 
+    ecoVal <- data.frame(over(x = cleanPoints, y = ecoReg))%>%
+      dplyr::select(ECO_ID )%>%
+      distinct() %>%
+      drop_na() %>%
+      filter(ECO_ID != -9998) # -9998 are lakes
     
-    #calculate ERS
-    ers <- min(c(100, (ecoValsGLen/ecoValsAllPointsLen)*100))
-
     
+    #run only for spp with occ file
+    if (!file.exists(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))) {
+      ers <- 0
+      ecoValsGLen <- NA
+      ecoValsAllPointsLen <- nrow(ecoVal)
+    }else{
+      
+      #load g buffer 
+      gBuffer <- raster::raster(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))
+      gBuffer[which(gBuffer[] == 0)] <- NA
+      gPoints <- sp::SpatialPoints(raster::rasterToPoints(gBuffer))
+      # extract values from ecoregions to points 
+      crs(gPoints) <- crs(ecoReg)
+      ecoValsG <- sp::over(x = gPoints, y = ecoReg) %>%
+        distinct(ECO_ID ) %>%
+        filter(ECO_ID > 0)
+      
+      ecoValsGLen <- length(ecoValsG[!is.na(ecoValsG$ECO_ID),])
+      
+      
+      # number of ecoRegions present in all points 
+      ecoValsAllPointsLen <<- nrow(ecoVal)
+      
+      #calculate ERS
+      ers <- min(c(100, (ecoValsGLen/ecoValsAllPointsLen)*100))
+      
+      
     }
-  #create data.frame with output
-  out_df <- data.frame(ID=species, SPP_N_ECO=ecoValsAllPointsLen, G_N_ECO=ecoValsGLen, ERS=ers)
-  write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/ers_result.csv",sep=""),row.names=F)
-  
+    #create data.frame with output
+    out_df <- data.frame(ID=species, SPP_N_ECO=ecoValsAllPointsLen, G_N_ECO=ecoValsGLen, ERS=ers)
+    write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/ers_result.csv",sep=""),row.names=F)
+    
     #return object
-    return(out_df)
+    return(out_df) 
 }
-
-
-#testing the function
-#base_dir <- "~/nfs"
-#source("~/Repositories/aichi13/src/config.R")
-#source("~/Repositories/aichi13/src/1_modeling/1_2_alternatives/create_buffers.R")
-#ers_exsitu(species)
 

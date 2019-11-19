@@ -10,9 +10,9 @@ library(sp)
 library(raster)
 library(rgdal)
 library(tmap)
-library(tmap)
 library(devtools)
 #install_github("DFJL/SamplingUtil")
+library(geobuffer)
 library(SamplingUtil)
 library(velox)
 tmap::tmap_mode("view")
@@ -24,6 +24,7 @@ library(maxnet)
 library(pROC)
 library(dismo)
 library(redlistr)
+library(fasterize)
 
 # set all standard directories
 base_dir <<- "D:/cwrNA"
@@ -34,15 +35,16 @@ occ_dir <<- paste0(par_dir, "/occurenceData")
 temp_dir <<- paste0(base_dir , "/TEMP")
 
 #set name of the run version 
-run_version <<- "test20190827"
+run_version <<- "test20191023"
 
 #create list for error species 
-lowOccurence <- c()
-notModeled <- c()
+lowOccurence <- list()
+notModeled <- list()
 
 #set adjustable parameters 
 numPoints <<- 2000 # maximun number of points used in model (use in subSampleCountry.R)
-bufferDist <<- 0.5 # used to define buffer distance in gBuffer.r 
+bufferDist <<- 50000 # used to define buffer distance in gBuffer.r ## had to change from 0.5 when
+#swtiched to geobuffer package for SF object generation. 
 set.seed(1234)
 
 # set all primary file sources
@@ -53,6 +55,7 @@ naSHP@data <- naSHP@data %>% dplyr::select(-c(1:95))#
 ecoReg <<- readOGR(paste0(par_dir,"/ecoregions/wwf_terr_ecos.shp"),verbose = FALSE)
 occData <<- data.table::fread(paste0(par_dir, "/modelingData2019-08-30.csv"),header = TRUE)
 proArea <<- raster::raster(paste0(par_dir, "/protectedAreas/wdpa_reclass.tif"))
+
 
 # Load the sources scripts
 source.files = list.files(repo_dir, ".[rR]$", full.names = TRUE, recursive = T)
@@ -75,39 +78,49 @@ colnames(dfCounts) <-  c("species","totalRecords",	"hasLat", "hasLong","totalUse
                          "totalGUseful","totalHRecords",	"totalHUseful","numberOfUniqueSources", "NorthAmericanPoint" )
 # set loop at genus level
 genera <<- unique(occData$genus)
-testGen <- genera[2]
-
+testGen <- genera[1:length(genera)]
+troubleGen <- genera[1:2]
 # Are you testing? Yes or No 
 # if testing all code will run regradless of if the output exists or not. 
 # if false code will test expected output, if that exist it will not run function. 
 Testing <<- TRUE
 
 # select all species at the genus level and apply master script to run process
-for(i in genera){
-  t2a <- Sys.time()
-  genus <<- i
-  allSpec <- occData %>%
-    filter(genus %in% i)
-  # generate a folder within the gap analysis
-  folder <- paste0(occ_dir, "/",i)
-  dir.create(folder, showWarnings = FALSE) # https://stackoverflow.com/questions/4216753/check-existence-of-directory-and-create-if-doesnt-exist
-  write.csv(allSpec, paste0(folder, "/", "raw",i,".csv"), row.names = FALSE)
-  genusOcc <<- read.csv(paste0(folder, "/", "raw",i,".csv"))
-  speciesList <<- unique(allSpec$taxon)
-  print(speciesList)
-  #test
-  #testList <- speciesList[13:length(speciesList)]
-  # species1 <- "Vaccinium vitis-idaea"
-  #result_master = lapply(testList, master_run)
-  result_master = lapply(speciesList, master_run)
-                         # need to include a call for the summary of all features at the genus level
-                         # before the loop repeats
-  dfCounts <<- dfCounts[-1,]
-  write.csv(dfCounts, file = paste0(occ_dir,"/allCountsSummary.csv"))
-  # call the summarize script for all runs
-  # rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfGenus.rmd"),  # file 2
-  #                  output_file =  paste("SummaryReport_", genus , Sys.Date(), ".html", sep=''),
-  #                  output_dir = paste0(gap_dir, "/", genus))
-}
-t2b <- Sys.time()
-totalTime <- t2b-t2a 
+beepr::beep_on_error(
+  for(i in testGen){
+    t2a <- Sys.time()
+    genus <<- i
+    if (!file.exists(paste0(gap_dir,"/summaryDocs"))) {dir.create(paste0(gap_dir,"/summaryDocs"),recursive=T)}
+    allSpec <- occData %>%
+      filter(genus %in% i)
+    # generate a folder within the gap analysis
+    folder <- paste0(occ_dir, "/",i)
+    if (!file.exists(folder)) {dir.create(paste0(folder),recursive=T)}
+      
+    write.csv(allSpec, paste0(folder, "/", "raw",i,".csv"), row.names = FALSE)
+    genusOcc <<- read.csv(paste0(folder, "/", "raw",i,".csv"))
+    speciesList <<- unique(allSpec$taxon)
+    write.csv(x = speciesList, file = paste0(gap_dir,'/', genus, 'speciesList.csv'))
+    #test
+    testList <- speciesList[11:length(speciesList)]
+    #species1 <- "Vaccinium vitis-idaea"
+    result_master = lapply(testList, master_run)
+    #result_master = lapply(speciesList, master_run)
+    # need to include a call for the summary of all features at the genus level
+    # before the loop repeats
+    dfCounts <<- dfCounts[-1,]
+    write.csv(dfCounts, file = paste0(occ_dir,"/allCountsSummary.csv"))
+    # call the summarize script for all runs
+    speciesList <<- testList
+    try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfGenus.rmd"),  # file 2
+                              output_file =  paste("SummaryReport_", genus , Sys.Date(), ".html", sep=''),
+                              output_dir = paste0(gap_dir,"/", genus,"/summaryDocs")))
+    t2b <- Sys.time()
+    totalTime <- t2b-t2a 
+    print(paste0("the genus ", genus," includes ",
+                 length(speciesList), " in a total of ", totalTime," minutes."))
+  }
+)
+try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfRun.rmd"),  # file 2
+                      output_file =  paste("SummaryReport_", run_version , Sys.Date(), ".html", sep=''),
+                      output_dir = paste0(base_dir,"/runSummaries")))

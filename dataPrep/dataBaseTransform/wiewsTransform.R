@@ -8,33 +8,33 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrOfNA/occurrence_data2019_05_29/WIEWS/wiews"
+base_dir <- "D:/cwrNA/occurrence_data2019_05_29/WIEWS"
 
 # Load in data 
-csvPath <- paste0(base_dir,"/colin_wiews.csv")
-data <- data.table::fread(csvPath, header = FALSE)
+csvPath <- paste0(base_dir,"/COLIN_GENUS.csv")
+data <- data.table::fread(csvPath, header = TRUE) # 1516974      21   fill = TRUE just ends rsesion
+## issues with read table... sticking with fread for now. 
+# data2 <- read.table(csvPath, sep = "\t",header = TRUE, fill=TRUE) # 753805     21 line 376281 did not have 21 elements
 
-# names of columns 
-cName <- c("Year", "Country ISO3 code",	"Country name",
-          "Holding institute code",	"Holding institute name",
-          "Accession number",	"Taxon",	"Acquisition date (YYYY/MM)",
-          "Country of origin (ISO3)",	"Country of origin",
-          "Biological status",	"Genebank(s) holding safety duplications - code",
-          "Genebank(s) holding safety duplications",	"Latitude of collecting site (decimal degrees format)",
-          "Longitude of collecting site (decimal degrees format)",
-          "Collecting/acquisition source",	"Type of germplasm storage",
-          "Status under the Multilateral System",	'Data owner',	"Data owner details",
-          "Source of information")
-# apply names to data 
-colnames(data)<-cName
 #View(data)
 # Select necessary columns from dataset 
 dataThin <- data %>%
-  dplyr::select("Country ISO3 code","Country name", "Holding institute code",
+  dplyr::select("Country of origin (ISO3)", "Country of origin", "Holding institute code",
         "Accession number","Taxon","Latitude of collecting site (decimal degrees format)",
         "Longitude of collecting site (decimal degrees format)", "Type of germplasm storage",
-        "Source of information", "Collecting/acquisition source")
+        "Source of information", "Collecting/acquisition source", "Biological status","Source of information" )
+
+# select out FAO-WIEWS from column 21 due to over lap with other databases 
+# Use biological Status to select "", "100) Wild" ,"200) Weedy"   
+dataThin <- dataThin %>%
+  filter(`Source of information` == "FAO-WIEWS" |`Source of information` == "") %>%
+  filter(`Biological status` == "100) Wild" | `Biological status` == "200) Weedy" | `Biological status` == "")
+
+# filter for value based on preservation status 
+dataThin <- dataThin[dataThin$`Type of germplasm storage` %in% c("20) Field","13) Seed long-term", "","12) Seed medium-term"),]
+
 nr <- nrow(dataThin)
+
 
 # define structure of the empty dataframe 
 df <- data.frame(taxon=character(nr),
@@ -50,6 +50,9 @@ df <- data.frame(taxon=character(nr),
                  country=character(nr),
                  iso3=character(nr),
                  localityInformation=character(nr),
+                 biologicalStatus = character(nr),
+                 collectionSource = character(nr),
+                 finalOrigin = character(nr),
                  stringsAsFactors=FALSE)
 
 # assign columns to location in empty dataframe
@@ -58,7 +61,7 @@ df$genus <- NA
 df$species <- NA
 df$latitude <- dataThin$`Latitude of collecting site (decimal degrees format)`
 df$longitude <- dataThin$`Longitude of collecting site (decimal degrees format)`
-df$databaseSource <- dataThin$`Source of information` 
+df$databaseSource <- "wiews"
 df$institutionCode <- dataThin$`Holding institute code`
 df$type <- "G"
 df$uniqueID <- dataThin$`Accession number`
@@ -66,11 +69,18 @@ df$sampleCategory <- dataThin$`Type of germplasm storage`
 df$country <- dataThin$`Country name`
 df$iso3 <- dataThin$`Country ISO3 code`
 df$localityInformation <- dataThin$`Collecting/acquisition source`
+df$biologicalStatus <- dataThin$`Biological status`
+df$collectionSource <- dataThin$`Collecting/acquisition source`
+df$finalOrigin <- NA 
+
+# pull in checkSynomyn function and apply it 
+source(file="D:/cwrNA/src/dataPrep/dataBaseTransform/checkSynonymsFunction.R")
+df <- checkSynonym(df)
 
 # Spilt name to get at genus and species 
 #test <- df[1:100,]
 df$name <- df$taxon
-df <- tidyr::separate(data = df, "name",into =c('genus','spec','sub1','sub2'),sep=' ')
+df <- tidyr::separate(data = df, "name",into =c('genus','spec','sub1','sub2','sub3', 'sub4'),sep=' ')
 #View(df)
 
 
@@ -90,16 +100,11 @@ df4 <- setSpecies(df)
 # remove all NA 
 df6 <- str_remove_all(df4$species, 'NA') %>%
   str_remove_all("__")
-#View(df6)  
 df4$species <- df6
-#View(head(df4))
-
 df4 <- subset(x = df4, select = -c(spec,sub1,sub2) )
-#View(df4)
 
-
-# actual code 
-testLatLong <<- df4 %>%
+# test for mis matched latlong values 
+testLatLong <- df4 %>%
   dplyr::select(c("uniqueID","latitude", "longitude")) %>%
   mutate(hasLat = !is.na(latitude) & latitude != "\\N" & latitude != "") %>%
   mutate(hasLong = !is.na(longitude) & longitude != "\\N"& longitude != "") %>%
@@ -114,3 +119,7 @@ write.csv(x = summariseErrors, file = paste0(base_dir,"/mismatchLatLong.csv"))
 
 # write out the new dataframe 
 write.csv(x = df4, file = paste0(base_dir,"/refinedWiews.csv"))
+
+
+
+

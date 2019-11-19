@@ -7,13 +7,12 @@
 #species=species1
 
 insitu_grs = function(species) {
-  if(!file.exists(paste0(sp_dir,"/gap_analysis/insitu/grs_result.csv"))){
       #GRSin = area in protect areas / total area * 100
       # mask protect area to native area 
       proNative <- raster::mask(x = proArea,mask = nativeArea)
       # add threshold raster to protect areas 
       protectSDM <- thrshold + proNative 
-      writeRaster(x = protectSDM,filename = paste0(sp_dir,"/modeling/alternatives/grs_pa_PAs_narea_areakm2.tif" ))
+      writeRaster(x = protectSDM,filename = paste0(sp_dir,"/modeling/alternatives/grs_pa_PAs_narea_areakm2.tif" ), overwrite=TRUE)
 
       # exclude protected areas outside of model threshold 
       thrshold2 <- thrshold
@@ -33,10 +32,7 @@ insitu_grs = function(species) {
       grs <- min(c(100, protect_area/thrshold_area*100))
       
     #create data.frame with output
-    df <- data.frame(ID = species, SPP_AREA_km2 = pa_spp_area, SPP_WITHIN_PA_AREA_km2 = protect_area, GRS = grs)
+    df <- data.frame(ID = species, SPP_AREA_km2 = thrshold_area, SPP_WITHIN_PA_AREA_km2 = protect_area, GRS = grs)
     write.csv(df,paste(sp_dir,"/gap_analysis/insitu/grs_result.csv",sep=""),row.names=F)
-  }else{
-    print("file exists, moving on")
-  }
 }
   

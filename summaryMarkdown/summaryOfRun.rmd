@@ -1,0 +1,198 @@
+---
+title: Summary of maxent modeling results and conservation gap analysis results per run
+author: Colin Khoury, Daniel Carver
+output:
+  html_document:
+  code_folding: hide
+highlight: tango
+theme: yeti
+toc: no
+toc_depth: 4
+toc_float:
+  collapsed: yes
+smooth_scroll: yes
+---
+
+this will change but based on inital content for CSSA this is what I want to summarise. 
+ - richness map 250 or all 
+ - number of species in each category md-
+ - gap maps 
+ - counts for EOO AOO 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# function for flitering list based on character values
+include <- function (theList, toMatch){
+  matches <- unique (grep(paste(toMatch,collapse="|"),
+                          theList, value=TRUE))
+  return(matches)
+}
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# define run 
+run_version  <- 'test20191023'
+print(paste0("This is a summary of the ",run_version," modeling outputs."))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# write out a list of non modeling species 
+# lessThen3Points <- lowOccurence[!is.na(lowOccurence)]
+# lessThen10Points <- notModeled[!is.na(notModeled)]
+# 
+# write.csv(x = lessThen3Points, file = paste0(base_dir, "/runSummaries/lessThen3Points.csv"))
+# write.csv(x = lessThen10Points, file = paste0(base_dir, "/runSummaries/lessThen10Points.csv"))
+```
+### Species Richness map 
+ We were able to model 364 species from 65 genera 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Pull all genuslevel summary rasters 
+n= 1
+vector <- c()
+
+### need to put is a clause incase
+for(i in genera){
+  tif <- list.files(path = paste0(gap_dir,"/",i),
+                    pattern = '.tif', recursive = TRUE, full.names = TRUE)
+  thres <- include(tif, "richnessMap")
+  thres <- thres[length(thres)] # richness map is output by date. This is select the last element in the list which is the most recent. 
+  if(length(thres) > 0){
+    vector[n] <- thres
+    n = n+1
+  }
+}
+
+# set extent equal to NAshp 
+rasterList <- lapply(X = vector, FUN = removeNA)
+
+# all all rasters together 
+r_sum = sum_all(rasterList, extend_all(rasterList))
+#Replace all zeros with NA
+r_sum[r_sum == 0]<-NA
+
+# save content 
+try(qtm(r_sum))
+try(writeRaster(x = r_sum, filename = paste0(base_dir,"/runSummaries/richnessMap.tif"), overwrite=TRUE))
+
+
+```
+
+
+### Counts per gap ananlysis categories
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Pull all species level fcsSummary docs 
+files <- list.files(path = gap_dir , pattern = 'fcs_combined.csv', recursive = TRUE, full.names = TRUE)
+files <- include(files, run_version)
+
+# create empty dataframe with species, Difference between EX and IN, and summary priority 
+df <- data.frame()
+# select columns for each species and rbind to df 
+for(i in 1:length(files)){
+  file <- read.csv(files[i]) %>%
+    dplyr::select(ID, FCSex, FCSin, FCSc_mean_class)
+  df <- rbind(df,file)
+}
+# save content 
+
+# generate summaries of 
+# number of species in each group (lp,Mp,hp) and number which ex or in is higher. 
+counts <- df %>% 
+  mutate(diff = FCSex -FCSin)
+for(i in 1:nrow(counts)){
+  if(counts$diff[i] > 0){
+    counts$ExsituOverInsitu[i] <- 1
+  }else{
+        counts$ExsituOverInsitu[i] <- 0
+  }
+}
+write.csv(x = counts, file = paste0(base_dir, "/runSummaries/gapStatistics.csv"))
+
+c2 <- counts %>%
+  group_by(FCSc_mean_class, ExsituOverInsitu) %>%
+  dplyr::summarise(count = n())
+DT::datatable(c2)
+write.csv(x = c2, file = paste0(base_dir, "/runSummaries/gapStatisticsSummaries.csv"))
+
+```
+
+### Gap Maps 
+
+Insitu gap map 
+- took the species richness map generated about and masked out all protected areas. 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Insitu 
+
+# Pull in protect areas map and convert all 1 to NA 
+p1 <- proArea %>%
+  raster::crop(naSHP) %>%
+  raster::mask(naSHP)
+p1[is.na(p1)] <- 10
+p1[p1==1] <- NA 
+p1[p1==10] <- 1
+
+# mUTLIPLe NA protected areas by species richness map 
+inGap <- p1 * r_sum 
+
+try(qtm(inGap))
+try(writeRaster(x = inGap, filename = paste0(base_dir,"/runSummaries/insituGap.tif"), overwrite=TRUE))
+```
+
+### Exsitu gap map 
+so this one is a little goofy. Of the 360ish species we were able to model only 121 species had any useful g points. 
+- I expect there is an error within the data transformation step that is causing this. For example only 1 of cucurbita species had any g points. Not the case with our more quality dataset. 
+- I don't suggest spending much time on this map. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# exsitu 
+files <- list.files(path = gap_dir , pattern = 'gapMap.tif', recursive = TRUE, full.names = TRUE)
+files <- include(files, run_version)
+
+# compline all these rasters 
+# set extent equal to NAshp 
+rasterList1 <- lapply(X = files, FUN = removeNA)
+
+# all all rasters together 
+g_sum = sum_all(rasterList1, extend_all(rasterList1))
+#Replace all zeros with NA
+g_sum[g_sum == 0]<-NA
+
+# save content 
+try(qtm(g_sum))
+try(writeRaster(x = g_sum, filename = paste0(base_dir,"/runSummaries/gapMap.tif"), overwrite=TRUE))
+
+# set extent equal to NAshp 
+
+# add all of them together. 
+
+```
+
+
+
+### EOO AOO summary 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Pull all species level listingValues csvs 
+files <- list.files(path = gap_dir , pattern = 'listingValues.csv', recursive = TRUE, full.names = TRUE)
+files <- include(files, run_version)
+
+# compile into a single dataframe 
+df <- data.frame()
+for(i in 1:length(files)){
+  df <- rbind(df,read.csv(files[i]))
+}
+write.csv(x = df, file = paste0(base_dir, "/runSummaries/eooAooData.csv"))
+# summarise for counts of each. 
+Eoo <- df %>%
+  group_by(EOO.Status, AOO.Status) %>%
+  dplyr::summarise('Number of Species' = n())
+
+sumVal <- sum(Eoo$`Number of Species`)
+for(i in 1:nrow(Eoo)){
+  Eoo$`Percentage of Species`[i] <- (Eoo$`Number of Species`[i]/sumVal)*100
+}
+
+
+DT::datatable(Eoo,options = list(pageLength = 15) )
+write.csv(x = Eoo, file = paste0(base_dir, "/runSummaries/eooAooDataSummary.csv"))
+```

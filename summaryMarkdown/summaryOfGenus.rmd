@@ -20,6 +20,26 @@ include <- function (theList, toMatch){
                           theList, value=TRUE))
   return(matches)
 }
+
+# function for replacing na values with 0 
+removeNA = function(rasterPath){
+  r1 <- raster::raster(rasterPath)
+  r1[is.na(r1)] <- 0
+  return(r1)
+}
+
+# function for extending all rasters to an equal extent
+extend_all =function(rasters){
+  extent(Reduce(extend,rasters))
+}
+
+# function for adding all rasters together
+sum_all = function(rasters, extent){
+    re = lapply(rasters, function(r){extend(r, extent, value=0)})
+    Reduce("+",re)
+  }
+
+
 ```
 
 
@@ -28,8 +48,9 @@ This map combines all threshold maps for individual species.
 
 
 ```{r  echo=FALSE, message=FALSE, warning=FALSE}
+
 n= 1
-vector <- c("feature")
+vector <- c()
 baseDir <- paste0(gap_dir, "/", genus)
 ### need to put is a clause incase
 for(i in speciesList){
@@ -42,30 +63,17 @@ for(i in speciesList){
   }
 }
 
-removeNA = function(rasterPath){
-  r1 <- raster::raster(rasterPath)
-  r1[is.na(r1)] <- 0
-  return(r1)
-}
-
 
 rasterList <- lapply(X = vector, FUN = removeNA)
 
 
-extend_all =function(rasters){
-  extent(Reduce(extend,rasters))
-}
 
-sum_all =
-  function(rasters, extent){
-    re = lapply(rasters, function(r){extend(r, extent, value=0)})
-    Reduce("+",re)
-  }
+
 r_sum = sum_all(rasterList, extend_all(rasterList))
 #Replace all zeros with NA
 r_sum[r_sum == 0]<-NA
-qtm(r_sum)
-raster::writeRaster(x = r_sum, filename = paste0(baseDir , '/speciesRichness'), format = "GTiff",overwrite=TRUE)
+try(qtm(r_sum), FALSE)
+try(raster::writeRaster(x = r_sum, filename = paste0(baseDir, "/richnessMap_",Sys.Date() ,".tif"), overwrite=TRUE))
 
 ```
 <br>
@@ -147,6 +155,7 @@ species_summary <- function(species){
   return(summ_table)
   
   }
+
  
 
 species_table<-lapply(1:length(speciesList), function(i){
@@ -173,8 +182,7 @@ Evaluation statistics for the median model run for species that enough occurence
 
 ```{r  echo=FALSE, message=FALSE, warning=FALSE}
 n= 1
-speciesList <- species
-vector <- c("feature")
+vector <- c()
 ### need to put is a clause incase
 for(i in speciesList){
   csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
@@ -192,15 +200,48 @@ DT::datatable(df, options = list(pageLength = 25))
 
 ```
 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+## Gather raw Occurence data for Genus 
+
+n= 1
+vector <- c()
+### need to put is a clause incase
+for(i in speciesList){
+  csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
+  thres <- include(csv, "rawDataForNA.csv")
+  if(length(thres) > 0){
+    vector[n] <- thres
+    n = n+1
+  }
+}
+df <- lapply(vector, read.csv)%>%
+  bind_rows
+
+write.csv(df, paste0(baseDir, "/summaryDocs/occurenceInNA",Sys.Date() ,".csv"), row.names = FALSE, quote = FALSE)
+```
 <br>
 <br>
 <br>
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(lowOccurence>0)){
+  print("theses specices had no acceptable occurance data")
+### Species No Run due to low occurence data 
+print(lowOccurence )
+}
+
+if(length(notModeled>0)){
+  print("there species had less then 20 occurence point and could now be modeled")
+### Species not randue to Less then 20 occurences. 
+print(notModeled)
+}
+
+```
 
 ```{r  echo=FALSE, message=FALSE, warning=FALSE}
 # compile all the modeled Bio Data
 n= 1
-speciesList <- species
-vector <- c("feature")
+vector <- c()
   ### need to put is a clause incase
 for(i in speciesList){
 csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
@@ -213,15 +254,14 @@ n = n+1
 
 df <- lapply(vector, read.csv)%>%
   bind_rows
-colnames(df) <- names(read.csv(bioValues))
+
 write.csv(df, paste0(baseDir, "/modeledBioValues_",Sys.Date() ,".csv"), row.names = FALSE)
 ```
 
 ```{r  echo=FALSE, message=FALSE, warning=FALSE}
 # compile all the variable selection options
 n= 1
-speciesList <- species
-vector <- c("feature")
+vector <- c()
   ### need to put is a clause incase
 for(i in speciesList){
 csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)

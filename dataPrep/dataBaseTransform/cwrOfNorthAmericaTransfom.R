@@ -8,16 +8,15 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrOfNA/occurrence_data2019_05_29/cwrofnorthamericabook"
+base_dir <- "D:/cwrNA/occurrence_data2019_05_29/cwrofnorthamericabook"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/CWRofNAmerica_dataextras.csv")
 data <- data.table::fread(csvPath, header = TRUE)
 # Select necessary columns from dataset 
 dataThin <- data %>%
-  select("id", "Taxon", "lat", 
-         "lon", "final_cult_stat",
-         "H","G","source main")
+  select("id", "Taxon","Type","Source",
+         "lat", "lon", "final_cult_stat")
 nr <- nrow(dataThin)
 
 # define structure of the empty dataframe 
@@ -34,6 +33,9 @@ df <- data.frame(taxon=character(nr),
                  country=character(nr),
                  iso3=character(nr),
                  localityInformation=character(nr),
+                 biologicalStatus = character(nr), 
+                 collectionSource = character(nr),
+                 finalOriginStat = character(nr),
                  stringsAsFactors=FALSE)
 
 # assign columns to location in empty dataframe
@@ -42,14 +44,17 @@ df$genus <- NA
 df$species <- NA
 df$latitude <- dataThin$lat
 df$longitude <- dataThin$lon
-df$databaseSource <- dataThin$`source main`
-df$institutionCode <- NA
-df$type <- NA
+df$databaseSource <- "cwrofnorthamericabook"
+df$institutionCode <- dataThin$Source
+df$type <- dataThin$Type
 df$uniqueID <- dataThin$id  
-df$sampleCategory <- dataThin$final_cult_stat
+df$sampleCategory <- NA
 df$country <- NA
 df$iso3 <- NA
 df$localityInformation <- NA
+df$biologicalStatus <- dataThin$final_cult_stat
+df$collectionSource <- NA
+df$finalOriginStat <- NA 
 
 # determine Genus and species from taxon 
 test1 <- tidyr::separate(data = df,taxon,into=c("genus","species","sep1","var1"),sep="_")
@@ -67,11 +72,13 @@ for(i in 1:nrow(test1)){
 df$genus <- test1$genus
 df$species <- test1$fullSpecies
 
-# determine type from H and G 
-dataThin$H[dataThin$H == 1]  <- "H" 
-dataThin$H[dataThin$H == 0]  <- "G" 
-df$type <- dataThin$H
+# replace _ with " " on taxon 
+df$taxon <- gsub(pattern = "_", replacement = " ",x = df$taxon)
 
+
+# pull in checkSynomyn function and apply it 
+source(file="D:/cwrNA/src/dataPrep/dataBaseTransform/checkSynonymsFunction.R")
+df <- checkSynonym(df)
 
 
 # actual code 
@@ -90,3 +97,4 @@ write.csv(x = summariseErrors, file = paste0(base_dir,"/mismatchLatLong.csv"))
 
 # write out the new dataframe 
 write.csv(x = df, file = paste0(base_dir,"/refinedcwrOfNABook.csv"))
+

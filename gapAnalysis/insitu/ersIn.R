@@ -4,20 +4,27 @@
 # carver.dan1@gmail.com
 ###
 ers_insitu <- function(species) {
-  if(!file.exists(paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"))){
     # mask protect area to native area 
     proNative <- raster::mask(x = proArea,mask = nativeArea)
     # load in protected area maps and convert to points 
     protectPoints <- sp::SpatialPoints(raster::rasterToPoints(proNative))
     # extract values from ecoregions to points 
     crs(protectPoints) <- crs(ecoReg)
-    ecoValsProt <- sp::over(x = protectPoints, y = ecoAreas) %>%
+    ecoValsProt <- sp::over(x = protectPoints, y = ecoReg) %>%
+      dplyr::select(ECO_ID )%>%
       distinct(ECO_ID ) %>%
+      drop_na()%>%
       filter(ECO_ID > 0)
     #number of ecoRegions in protected areas 
     ecoInProt <- nrow(ecoValsProt)
     
     # number of ecoregion in the SDM 
+    ecoVal <- data.frame(over(x = cleanPoints, y = ecoReg))%>%
+      dplyr::select(ECO_ID )%>%
+      distinct() %>%
+      drop_na() %>%
+      filter(ECO_ID > 0) # -9998 are lakes
+    
     ecoInSDM <- nrow(ecoVal)
 
     #calculate ERS
@@ -27,8 +34,4 @@ ers_insitu <- function(species) {
     write.csv(df,paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"),row.names=F)
     #return object
     return(df)
-  }else{
-    print("file exist, moving on")
-  }
-
 }

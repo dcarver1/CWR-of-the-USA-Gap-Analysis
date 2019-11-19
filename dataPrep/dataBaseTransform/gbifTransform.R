@@ -42,7 +42,7 @@ df$genus <- dataThin$V9
 df$species <- NA
 df$latitude <- dataThin$V17
 df$longitude <- dataThin$V18
-df$databaseSource <- NA
+df$databaseSource <- "GBIF"
 df$institutionCode <- NA
 df$type <- NA
 df$uniqueID <- dataThin$V1

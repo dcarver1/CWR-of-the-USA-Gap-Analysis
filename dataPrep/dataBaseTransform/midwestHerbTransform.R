@@ -8,16 +8,17 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrOfNA/occurrence_data2019_05_29/Midwest_herbaria/SymbOutput_2019-05-28_151547_DwC-A"
+base_dir <- "D:/cwrNA/occurrence_data2019_05_29/Midwest_herbaria/SymbOutput_2019-05-28_151547_DwC-A"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/occurrences.csv")
 data <- data.table::fread(csvPath, header = TRUE)
 # Select necessary columns from dataset 
 dataThin <- data %>%
-  select("id","institutionCode", "basisOfRecord",
-        "scientificName","genus","specificEpithet", "country",
-        "locality", "decimalLatitude","decimalLongitude")
+  select("id","institutionCode", "basisOfRecord","occurrenceID",
+        "scientificName","genus","specificEpithet", "taxonRank" , "infraspecificEpithet", 
+        "country","stateProvince","county", "municipality", "locality",
+        "decimalLatitude","decimalLongitude")
 nr <- nrow(dataThin)
 
 # define structure of the empty dataframe 
@@ -34,12 +35,15 @@ df <- data.frame(taxon=character(nr),
                  country=character(nr),
                  iso3=character(nr),
                  localityInformation=character(nr),
+                 biologicalStatus = character(nr), 
+                 collectionSource = character(nr),
+                 finalOriginStat = character(nr),
                  stringsAsFactors=FALSE)
 
 # assign columns to location in empty dataframe
 df$taxon <- dataThin$scientificName
 df$genus <- dataThin$genus
-df$species <- dataThin$specificEpithet
+df$species <- NA
 df$latitude <- dataThin$decimalLatitude
 df$longitude <- dataThin$decimalLongitude
 df$databaseSource <- "midwestHerbarium " 
@@ -49,7 +53,22 @@ df$uniqueID <- dataThin$id
 df$sampleCategory <- dataThin$basisOfRecord
 df$country <- dataThin$country
 df$iso3 <- NA
-df$localityInformation <- dataThin$locality
+df$localityInformation <- NA
+df$biologicalStatus <- dataThin$improvement_status_code
+df$collectionSource <- NA
+df$finalOriginStat <- NA 
+
+# Locality in formation, cacatanate "country","stateProvince","county", "municipality", "locality",
+d2 <- dataThin %>% tidyr::unite("local2" , country,stateProvince,county, municipality, locality, sep = " -- ")
+df$localityInformation <- d2$local2
+
+# Species - concatenate "genus","specificEpithet", "taxonRank" , "infraspecificEpithet"
+d3 <- dataThin %>% tidyr::unite("fullSpecies", specificEpithet, taxonRank , infraspecificEpithet, sep = " ")
+df$species <- d3$fullSpecies
+
+# pull in checkSynomyn function and apply it 
+source(file="D:/cwrNA/src/dataPrep/dataBaseTransform/checkSynonymsFunction.R")
+df <- checkSynonym(df)
 
 
 # actual code 

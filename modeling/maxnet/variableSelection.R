@@ -4,6 +4,7 @@
 # carver.dan1@gmail.com
 ### 
 varaibleSelection <- function(species){
+  
   # subset predictor data and presence column 
   varSelect <- bioValues %>% dplyr::select(-c(longitude,latitude ))
   # remove all na from dataframe 

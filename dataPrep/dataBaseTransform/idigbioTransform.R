@@ -8,7 +8,9 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrOfNA/occurrence_data2019_05_29/idigbio"
+base_dir <- "D:/cwrNA/occurrence_data2019_05_29/idigbio"
+
+"D:\cwrNA\occurrence_data2019_05_29\idigbio\occurrence.csv"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/occurrence.csv")

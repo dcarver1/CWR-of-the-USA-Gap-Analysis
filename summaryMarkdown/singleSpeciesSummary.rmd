@@ -150,9 +150,9 @@ The Mess map showns below takes the threshold map above and limits it's extent t
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("Models were not are to be ran on this species due to insufficent number of samples")
 }else{
-  palette1 <- c("#FFFFFF","#45B320","#7570b3")
+  palette1 <- c("#FFFFFF","#fc4103","#7570b3")
   mess[is.na(mess)] <-0 
-  messThres <- mess + thrshold 
+  messThres <-thrshold + mess 
   tm_shape(messThres) + tm_raster(palette=palette1)+
     tm_scale_bar()
 }
@@ -193,15 +193,12 @@ if(counts$totalGUseful == 0){
   # %>%   filter(type == "G")
   occList <- cleanPoints[which(cleanPoints$type == "G"),]
   if(nrow(occList) != 0){
-      sp = sp::SpatialPoints(occList[,c("longitude", "latitude")])
-      gapRaster <- raster(include(tif, "ga50"))
-      collgap1 <- thrshold + gapRaster
-      sp = sp::SpatialPoints(occList[,c("longitude", "latitude")])
-  gapRaster <- raster(include(tif, "ga50"))
-  gapRaster2 <- raster(include(tif, "grs_pa_PAs_narea_areakm2"))
-  gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
-  collgap1 <- thrshold + gapRaster
-  GRSin <- thrshold + gapRaster2
+    sp = sp::SpatialPoints(occList[,c("longitude", "latitude")])
+   gapRaster <- raster(include(tif, "ga50"))
+   gapRaster2 <- raster(include(tif, "grs_pa_PAs_narea_areakm2"))
+   gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
+   collgap1 <- thrshold + gapRaster
+   GRSin <- thrshold + gapRaster2
 
   }else{
 print("There are no G points present so this process could not be completed.")
@@ -223,13 +220,20 @@ Area Where samples have been collected = 2
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("There are no G points present so this process could not be completed.")
 }else{
+  
+  occList <- cleanPoints[which(cleanPoints$type == "G"),]
   if(nrow(occList) == 0){
   print("There are no G points present so this process could not be completed.")
   }else{ gPoint <- cleanPoints[cleanPoints@data$type == "G",]
   palette1 <- c(  "#FFFFFF","#45B320","#7570b3")
   if(length(gPoint@data)>0){
-    collgap1[is.na(collgap1)]<-0
-    comb2 <-  collgap1 + thrshold
+    thes1 <- thrshold 
+    thes1[thes1==0]<-NA 
+    bufferInThres <- collgap1 * thes1
+    bufferInThres[is.na(bufferInThres)]<-0
+    comb2 <-  bufferInThres + thrshold
+    gGaps <- thrshold - bufferInThres 
+    writeRaster(x = gGaps, filename = paste0(sp_dir,'/gap_analysis/exsitu/gapMap.tif'))
   tm_shape(comb2) + tm_raster(palette = palette1)+
   tm_shape(gPoint) + tm_dots()+
     tm_scale_bar()
@@ -261,7 +265,7 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("Models were not able to be ran on this species due to insufficent number of samples")
 }else{
 tableIn <- dplyr::bind_cols(counts, read.csv(include(csv, "insitu/summary.csv")))
-tableIn <- tableIn[c(7,1,2,3,4,5,6,8,9,10,11)]
+tableIn <- tableIn[c(7,1,2,3,4,5,6,11,12,13,14)]
 names(tableIn) <- c("ID","totalRecords","totalUseful","totalGRecords",
                     "totalGUseful","totalHRecords","totalHUseful","SRS_in",
                     "GRS_in","ERS_in","FCS_in")
@@ -286,13 +290,19 @@ Protected Lands within the Potential Distribution = 2
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("Models were not able to be ran on this species due to insufficent number of samples")
 }else{
+gapRaster2 <- proArea %>%
+  raster::crop(thrshold) %>%
+  raster::mask(thrshold)
 
-gapRaster2 <- raster(include(tif, "grs_pa_PAs_narea_areakm2"))
-      gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
       if(file.exists(include(tif, "spdist_thrsld"))){
-        GRSin <- thrshold + gapRaster2
+        gapRaster2[is.na(gapRaster2)] <- 0 
+        thres1 <- thrshold
+        thres1[thres1==0]<-NA
+        gapRaster2a <- gapRaster2 * thres1
+        gapRaster2a[is.na(gapRaster2a)]<-0
+        comb2a <- gapRaster2a + thrshold 
         palette3 <- c(  "#FFFFFF","#45B320","#7570b3")
-tm_shape(GRSin) + tm_raster(palette = palette3)
+tm_shape(comb2a) + tm_raster(palette = palette3)
       }else{
         print("Models were not able to be ran on this species due to insufficent number of samples")
       }

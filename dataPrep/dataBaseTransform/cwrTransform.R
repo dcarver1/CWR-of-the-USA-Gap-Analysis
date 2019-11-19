@@ -41,7 +41,7 @@ df$genus <- NA
 df$species <- NA
 df$latitude <- dataThin$V75
 df$longitude <- dataThin$V81
-df$databaseSource <- dataThin$V3
+df$databaseSource <- "cwr_occ"
 df$institutionCode <- NA
 df$type <- dataThin$V2
 df$uniqueID <- dataThin$V12

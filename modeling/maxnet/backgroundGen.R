@@ -4,7 +4,6 @@
 # carver.dan1@gmail.com
 ### 
 generateModelingData <- function(species){
-  
   #function for checking area
   numberBackground <- function(area){
     n <- rgeos::gArea(area)*58
@@ -40,7 +39,9 @@ generateModelingData <- function(species){
   }
   
   # 3. extract all values to background points 
-  bck_vals <- raster::extract(x = bioVars$as.RasterStack(),y = bck_data)
+  rasterStack <- bioVars$as.RasterStack() %>% 
+    raster::crop(nativeArea)
+  bck_vals <- raster::extract(x = rasterStack,y = bck_data)
   bck_data_bio <-as.data.frame(cbind(bck_data@coords, bck_vals))%>%
     mutate(presence = 0)
   bck_data_bio$longitude <- bck_data_bio$x
@@ -48,7 +49,7 @@ generateModelingData <- function(species){
   bck_data_bio <- bck_data_bio %>% dplyr::select(-c("x","y"))
   
   # extract values to presence points 
-  prs_vals <- raster::extract(x = bioVars$as.RasterStack(),y = sp::SpatialPoints(cleanPoints@coords))
+  prs_vals <- raster::extract(x = rasterStack,y = sp::SpatialPoints(cleanPoints@coords))
   prs_data_bio <-as.data.frame(cbind(cleanPoints@coords, prs_vals))%>%
     dplyr::mutate(presence = 1)
   

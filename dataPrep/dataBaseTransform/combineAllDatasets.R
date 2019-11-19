@@ -9,7 +9,7 @@ library(tidyverse)
 library(data.table)
 
 
-base_dir <- "D:/cwrOfNA/occurrence_data2019_05_29"
+base_dir <- "D:/cwrNA/occurrence_data2019_05_29"
 
 # read in all csvs 
 files <- list.files(path = base_dir, pattern = ".csv",full.names = TRUE,recursive = TRUE)
@@ -30,7 +30,18 @@ df <- data.frame(taxon=character(),
                  country=character(),
                  iso3=character(),
                  localityInformation=character(),
+                 biologicalStatus = character(), 
+                 collectionSource = character(),
+                 finalOriginStat = character(),
                  stringsAsFactors=FALSE)
+
+# test for duplicates with GBIF data 
+
+
+# test for invalid lat long 
+
+# 
+
 
 # create function 
 # read in one csv, r bind it to df, drop csv from memory 
@@ -38,7 +49,8 @@ appendTable <- function(dataframe, pathToData){
   data <- data.table::fread(pathToData, header = TRUE,)%>%
     dplyr::select("taxon","genus","species","latitude","longitude",
                  "databaseSource","institutionCode","type","uniqueID",
-                 "sampleCategory","country","iso3","localityInformation")
+                 "sampleCategory","country","iso3","localityInformation", 
+                 "biologicalStatus", "collectionSource","finalOriginStat")
   dataframe <- rbind(dataframe, data)
   rm(data)
   return(dataframe)

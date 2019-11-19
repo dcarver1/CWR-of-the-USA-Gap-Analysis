@@ -11,7 +11,7 @@ nat_area_shp <- function(species) {
   crs(xyData) <- crs(ecoReg)
   
   # test to see which ecoregions have points within them 
-  ecoVal <<- data.frame(over(x = xyData, y = ecoReg))%>%
+  ecoVal <- data.frame(over(x = xyData, y = ecoReg))%>%
     dplyr::select(ECO_ID )%>%
     distinct() %>%
     drop_na() %>%
@@ -27,4 +27,4 @@ nat_area_shp <- function(species) {
   #write out feature
   setwd(paste0(sp_dir, "/modeling/nativeArea"))
   writeOGR(obj=nativeArea, dsn="narea.shp", layer="narea", driver="ESRI Shapefile",overwrite_layer = TRUE) # this is in geographical projection
-}
+  }
