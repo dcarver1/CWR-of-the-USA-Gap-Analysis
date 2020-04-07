@@ -14,9 +14,12 @@ par_dir <<- paste0(base_dir , "/parameters")
 occ_dir <<- paste0(par_dir, "/occurenceData")
 
 # read in raw data 
-occData <<- data.table::fread(paste0(par_dir, "/modelingData2019-08-30.csv"),header = TRUE)
+occData <<- data.table::fread(paste0(base_dir, "/occurrence_data2019_05_29/combinedOccurance2019-12-13.csv"),header = TRUE)
 naSHP <<- readOGR(paste0(par_dir,"/northAmericaArea/northAmericaArea.shp"),verbose = FALSE)
 naSHP@data <- naSHP@data %>% dplyr::select(-c(1:95))#
+
+# check for duplicates with latlong and 
+
 
 # getting counts of species across the globe. 
 d1 <- occData %>%
@@ -26,7 +29,7 @@ d1 <- occData %>%
 d2 <- d1 %>%
   group_by(taxon, hasLatLong)%>%
   dplyr::summarise(count = n())
-write.csv(d2,file=paste0(occ_dir, "/allDataCounts.csv"))
+write.csv(d2,file=paste0(occ_dir, "/allDataCounts", Sys.Date(),".csv"))
 
 # filter to the general area of the USA to drop points before intersect 
 d1a <- d1 %>%
@@ -55,12 +58,12 @@ crs(spPoint) <- crs(naSHP)
 
 
 intersect1 <- intersect(spPoint, naSHP)
-write.csv(intersect1@data,file=paste0(occ_dir, "/allNorthAmericaOccuenceData.csv"))
+write.csv(intersect1@data,file=paste0(occ_dir, "/allNorthAmericaOccuenceData", Sys.Date(),".csv"))
 
 
 d2a <- intersect1@data %>%
   group_by(taxon)%>%
   dplyr::summarise(count = n())
 
-write.csv(d2a,file=paste0(, "/allNorthAmericaCounts.csv"))
+write.csv(d2a,file=paste0(occ_dir, "/allNorthAmericaCounts", Sys.Date(),".csv"))
 

@@ -54,7 +54,7 @@ df$sampleCategory <- dataThin$SAMPSTAT
 df$country <- NA
 df$iso3 <- dataThin$ORIGCTY
 df$localityInformation <- dataThin$COLLSITE
-df$biologicalStatus <- dataThin$improvement_status_code
+df$biologicalStatus <- NA
 df$collectionSource <- dataThin$COLLSRC
 df$finalOriginStat <- NA
 df$historicTemp <- dataThin$HISTORIC

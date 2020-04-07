@@ -18,14 +18,14 @@ generateModelingData <- function(species){
   # produce background points based on native area area
   bck_data <- spsample(nativeArea, n = n, type = "random" )
   crs(bck_data) <- crs(nativeArea)
-  
+  print(1)
   # test so that background points do not overlap with presence points 
   # create the point buffer
   # 1. buffer values from known presece locations by 0.000556 
   presBuff <- rgeos::gBuffer(sp::SpatialPoints(cleanPoints@coords), width=0.000556) #width=0.000556
   crs(presBuff) <- crs(nativeArea)
   # convert to spatial dataframe 
-  
+  print(2)
   # 2. run an intersect between buffer and background point
   intersect <- data.frame(over(bck_data, presBuff))
   
@@ -37,7 +37,7 @@ generateModelingData <- function(species){
     bck_data <- sp::SpatialPoints(coords = c(nbd[,1:2]))
     crs(bck_data) <- crs(nativeArea)
   }
-  
+  print(3)
   # 3. extract all values to background points 
   rasterStack <- bioVars$as.RasterStack() %>% 
     raster::crop(nativeArea)
@@ -47,12 +47,13 @@ generateModelingData <- function(species){
   bck_data_bio$longitude <- bck_data_bio$x
   bck_data_bio$latitude <- bck_data_bio$y
   bck_data_bio <- bck_data_bio %>% dplyr::select(-c("x","y"))
-  
+  print(4)
   # extract values to presence points 
   prs_vals <- raster::extract(x = rasterStack,y = sp::SpatialPoints(cleanPoints@coords))
-  prs_data_bio <-as.data.frame(cbind(cleanPoints@coords, prs_vals))%>%
-    dplyr::mutate(presence = 1)
-  
+  print(4.1)
+  prs_data_bio <- as.data.frame(cbind(prs_vals,cleanPoints@data[,2:3])) %>%
+    mutate(presence = 1)
+  print(5)
   # merge presence and background sets 
   bioValues <<- dplyr::bind_rows(bck_data_bio,prs_data_bio)
   

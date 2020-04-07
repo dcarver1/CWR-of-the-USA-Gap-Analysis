@@ -16,16 +16,16 @@ evaluate_sdm_function <- function(species){
       cat("Thresholding using Max metrics  for: ", species, "\n")
       # thrsld <- as.numeric(mean(evaluate_table[,"Threshold"],na.rm=T))
       thrsld <- as.numeric(mean(evaluate_table[,"threshold_train"],na.rm=T))
-      if (!file.exists(paste0(sp_dir, "/modeling/spdist_thrsld.tif"))) {
+      if (!file.exists(paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"))) {
         # spThrsld <- spMedian
-        spThrsld <- raster(paste0(sp_dir,"/modeling/",species,"_prj_mean.tif"))
+        spThrsld <- raster(paste0(sp_dir,"/modeling/",species,"_prj_median.tif"))
         spThrsld[which(spThrsld[] >= thrsld)] <- 1
         spThrsld[which(spThrsld[] < thrsld)] <- 0
-        raster::writeRaster(x = spThrsld, filename = paste0(sp_dir, "/modeling/spdist_thrsld.tif"),overwrite = TRUE)
-      } else {
-        spThrsld <- raster(paste0(sp_dir, "/modeling/spdist_thrsld.tif"))
+        raster::writeRaster(x = spThrsld, filename = paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"),overwrite = TRUE)
+          } else {
+        spThrsld <- raster(paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"))
       }
-      
+      thrshold<<- spThrsld
       if(nrow(cleanPoints)>=3){
         # Gathering final evaluation table
         evaluate_table_f <<- evaluate_function(species)

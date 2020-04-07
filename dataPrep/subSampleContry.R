@@ -15,7 +15,10 @@
 
 
 sampling<-function(species){
-  d1 <- cleanPoints@data
+  d1 <- cleanPoints@data %>%
+    dplyr::filter(type == "H")
+  dG <- cleanPoints@data %>% 
+    dplyr::filter(type == "G")
   countries<- unique(na.omit(d1$iso3_check))
   count_occ<-nrow(d1)
 
@@ -50,9 +53,10 @@ sampling<-function(species){
     muestra<-d1
   }
   
-  cleanData <<-data.frame(muestra)
+  cleanData <<-rbind(data.frame(muestra), dG)
   write.csv(cleanData, file = paste0(sp_dir,"/cleanedModelingData.csv"),row.names = FALSE)
-  
+  cleanPoints <<- SpatialPointsDataFrame(coords = cleanData[,c(3,2)], data = cleanData)
+  raster::crs(cleanPoints) <- raster::crs(ecoReg)
 }
 
 

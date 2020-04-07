@@ -1,0 +1,91 @@
+---
+title: "test1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tmap)
+library(sp)
+tmap::tmap_mode("view")
+base <- "D:/usda/rcJohnson"
+
+# read in data 
+d1 <- read.csv(paste0(base, "/analysisData/Passport data Italy2018-France 2017.csv"), 
+               header = TRUE)
+#drop empty column 
+d1 <- d1[-30,]
+
+# add column names to e-w n-s colunmes 
+names(d1)[names(d1) == "X"] <- "N_S"
+names(d1)[names(d1) == "X.1"] <- "E_W"
+
+# add position or negative to long based on e-w distintion 
+for(i in 1:nrow(d1)){
+  if(d1$E_W[i] == "W"){
+    d1$Longitude[i] <- -1 * d1$Longitude[i]
+  }
+}
+
+# generate a csv per species 
+for( j in unique(d1$Scientific.Name.Species)){
+  t1 <- d1 %>%
+    dplyr::filter(Scientific.Name.Species == j)
+  write.csv(x = t1, file = paste0(base, "/analysisData/speciesData/", j,".csv" ))
+}
+# summaries data by specices 
+s1 <- d1 %>%
+  dplyr::group_by(Scientific.Name.Species) %>%
+  dplyr::summarise(count = n())
+s1
+
+# create a spatial point object 
+c1 <- d1 %>% dplyr::select(Longitude, Latitude)
+c1[, 1:2] <- sapply(c1[, 1:2], as.numeric)
+p1 <- sp::SpatialPointsDataFrame(coords = c1 ,data = d1)
+qtm(p1)
+
+
+```
+
+# R Markdown
+<h1>r markdown <h1/> 
+
+## r mark down 
+#### r markdown 
+
+
+# Project name 
+
+## code block 
+```{r}
+qtm(p1)
+
+```
+
+
+### 
+
+
+
+
+
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

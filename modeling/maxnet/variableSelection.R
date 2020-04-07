@@ -18,7 +18,7 @@ varaibleSelection <- function(species){
   # # #vsurf
   # vsurf1 <- VSURF(x=xy_mxe , y=presenceAbsence , ntree = 2000 , parallel = TRUE)
   vsurfThres <- VSURF_thres(x=bioValues[,1:26] , y=as.factor(bioValues$presence) ,
-                            ntree = 50 )
+                            ntree = 100 )
   
   
   ###
@@ -40,7 +40,7 @@ varaibleSelection <- function(species){
   varsTested <- c()
   #loop through the top 5 predictors to remove correlated varables.
   for( i in 1:5){
-    print(i)
+    print(varNames[i])
     if(varNames[i] %in% varNames){
       # add variable to the test list 
       varsTested <- c(varsTested, varNames[i])
@@ -51,15 +51,8 @@ varaibleSelection <- function(species){
       #test is any correlated variables exist
       if(length(corVar) >0 ){
         # loop through the list of correlated variables
-        for(j in corVar){
-          # remove varable name from variable list
-          varNames <- varNames[which(varNames != j)]
-          # remove row from correlation dataframe ### Indexing on the this is not working at the moment. Leave out for the time being.
-          # correlation <- correlation[!vars,]
-          # print(dim(correlation))
-          print(paste0("the variable ", j, " was removed"))
-        }
-        
+        varNames <- varNames[!varNames  %in% corVar] 
+        print(paste0("the variable ", corVar, " was removed"))
       }
     }else{
       print("this variable has been removed already")
@@ -87,3 +80,5 @@ varaibleSelection <- function(species){
   variblesToModel <<- varSelect[,varNames]
 
 }
+
+

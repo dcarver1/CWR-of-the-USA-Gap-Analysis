@@ -5,7 +5,7 @@ evaluate_function <- function(species){
 
   ###ASD15
   esdCpt <- raster(paste0(sp_dir, "/modeling/",species,"_prj_std.tif"))
-  dumm <- raster(paste0(sp_dir, "/modeling/spdist_thrsld.tif"))
+  dumm <- raster(paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"))
   
   esdCpt[which(dumm[] < 0.001)] <- NA
   
@@ -63,3 +63,5 @@ evaluate_function <- function(species){
   #return
   return(evaluate_table_f)
 }
+
+

@@ -1,7 +1,8 @@
 ###
-# Calculate the proportion of points that fall within a protected areas. Insitu SRS 
-# 20191002
-# carver.dan1@gmail.com
+# Calculate the proportion of points that fall within a protected areas found within the predicted
+# model extent. Insitu SRS 
+# 20200303
+# dan.carver@carverd.com
 ###
 
 
@@ -10,11 +11,20 @@ srs_insitu <- function(species) {
 
   totalNum <- nrow(cleanPoints)
 
+  # read in threshold raster 
+  thrshold <- raster(x = paste0(sp_dir, "/modeling/spdist_thrsld_median.tif")) 
+  thrshold[which(thrshold[] == 0)] <- NA
+  # mask protect area to native area 
+  proNative <- raster::crop(x = proArea, y = thrshold)
+  #proNative[is.na(proNative)]<- 0
+  # add threshold raster to protect areas 
+  protectSDM <- thrshold * proNative 
+  
   # set coodinate systems equal  
-  crs(cleanPoints) = crs(proArea)
+  crs(cleanPoints) = crs(protectSDM)
   # run a extract to values and select all data. Test for NA, then sum true values for total number of points in protected
   #areas 
-  protectPoints <- sum(!is.na(raster::extract(x = proArea,y = cleanPoints)))
+  protectPoints <- sum(!is.na(raster::extract(x = protectSDM,y = cleanPoints)))
   
   #define SRS 
   if(protectPoints >= 0 ){

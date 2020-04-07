@@ -52,7 +52,7 @@ df <- data.frame(taxon=character(nr),
                  localityInformation=character(nr),
                  biologicalStatus = character(nr),
                  collectionSource = character(nr),
-                 finalOrigin = character(nr),
+                 finalOriginStat = character(nr),
                  stringsAsFactors=FALSE)
 
 # assign columns to location in empty dataframe
@@ -66,12 +66,12 @@ df$institutionCode <- dataThin$`Holding institute code`
 df$type <- "G"
 df$uniqueID <- dataThin$`Accession number`
 df$sampleCategory <- dataThin$`Type of germplasm storage`
-df$country <- dataThin$`Country name`
-df$iso3 <- dataThin$`Country ISO3 code`
+df$country <- NA
+df$iso3 <- NA
 df$localityInformation <- dataThin$`Collecting/acquisition source`
 df$biologicalStatus <- dataThin$`Biological status`
 df$collectionSource <- dataThin$`Collecting/acquisition source`
-df$finalOrigin <- NA 
+df$finalOriginStat <- NA 
 
 # pull in checkSynomyn function and apply it 
 source(file="D:/cwrNA/src/dataPrep/dataBaseTransform/checkSynonymsFunction.R")

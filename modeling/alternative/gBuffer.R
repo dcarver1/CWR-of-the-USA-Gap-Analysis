@@ -4,6 +4,7 @@
 create_buffers <- function(species){
     ## select all g points from point object 
     p1 <- subset(cleanPoints, type == "G") # select all g pointsd
+    raster::crs(p1) <- raster::crs(nativeArea)
     
     if(nrow(p1@data)== 0){
       print("there are no g points for this species")      

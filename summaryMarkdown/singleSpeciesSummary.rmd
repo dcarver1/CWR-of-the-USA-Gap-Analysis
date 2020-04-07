@@ -1,5 +1,5 @@
 ---
-title: Summary of maxent modeling results and conservation gap analysis results per taxon
+title: Summary of Maxnet modeling and conservation gap analysis results per taxon
 author: Colin Khoury, Daniel Carver
 output:
   html_document:
@@ -25,6 +25,8 @@ include <- function (theList, toMatch){
 
 ## Summary of the models for `r species`.
 
+The table below shows a summary of the counts for the important categories in the data. A useful record is one that has a complete set of latitude and longitude coordinates associated with it. 
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # taxa is the
 
@@ -33,49 +35,95 @@ csv <- list.files(baseDir, pattern = ".csv", recursive = TRUE , full.names = TRU
 if (file.exists(paste0(baseDir,'/counts.csv'))){
   counts <- as.data.frame(read.csv(paste0(baseDir,'/counts.csv'))) %>%
     dplyr::select(c("totalRecords", "totalUseful", "totalGRecords", "totalGUseful","totalHRecords", "totalHUseful"))
+  colnames(counts) <- c("Total Records", "Total Useful", "Total G Records", "Total G Useful","Total H Records", "Total H Useful")
 }else{
   print("There are no samples present for this species")
 }
-
+DT::datatable(counts)
 ```
 <br>
 <br>
 <br>
+  
+### Predictors Used in Modeling Process 
+The table below shows the variables listed in order of importance. As correlated variables were removed, the “Included in the Modeling Process” column defines if the variable was used in the final modeling process.  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(csv,"predictorImportance.csv")) == 0){
+  print("Models were not are to be ran on this species due to insufficent number of samples")
+}else{
+  t2 <- read.csv(include(csv,"predictorImportance.csv"))
+  t2 <- dplyr::left_join(x = t2, y= layerDescription, by = c("varNames" = "layer"))
+  t2 <- t2 %>% dplyr::select("varNames","description" ,"importance","includeInFinal","source")
+    colnames(t2) <- c("Variable Name", "Description", "Relative Importance to Model", "Included in the Modeling Process", "Data Source")
+  DT::datatable(t2)
+}
+```
 
 ### Evaluation metrics
-The modeling process was run with 10 replicates to attempt to account for random variation occuring in this type of process. The table below shows the statistical results for the 10 runs.
+To account for random variation occurring during modeling, the process was run ten times (K=10) for all species with more than 25 points. Species with more than 10 but less than 25 occurrences were run six times, and those with < 10 were modeled three times. The table below shows the statistical results for each run.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("No models were produced for this species due to insufficent number of samples")
 }else{
   # evalMetric <- include(csvs,"eval_metrics_rep.csv")
-  DT::datatable(read.csv(include(csv,"eval_metrics_rep.csv")))
+  modeledData <- read.csv(include(csv, "presBackgroundWithBiovars.csv"))
+  totalVals <- nrow(modeledData)
+  eval <- read.csv(include(csv,"eval_metrics_rep.csv"))
+  kfold <- nrow(eval)
+  if(kfold == 10){
+    training <- round(totalVals * 0.9, 0)
+    testing <- round(totalVals * 0.1, 0)
+  }
+  if(kfold == 6){
+    training <- round(totalVals * 0.83, 0)
+    testing <- round(totalVals * 0.17, 0)
+  }
+  if(kfold == 3){
+    training <- round(totalVals * 0.67, 0)
+    testing <- round(totalVals * 0.33, 0)
+  }
+  
+  
+  
+  
+  eval$Species <- species
+  eval$Testing <- testing
+  eval$Training <- training
+  eval$`Background + Training` <- testing + training
+  eval <- eval %>% 
+    dplyr::select("Species" , "Training", "Testing","Background + Training", "AUCtrain", "sensi_train","speci_train","threshold_train", "max.TSS_train","minROCdist_train","method_train", "AUCtest","threshold_test","sensi_test"       , "speci_test","matthews.cor_test", "LR_pos_test"      
+, "LR_neg_test","kappa_index_test" )
+  colnames(eval) <- c("Species" , "Training", "Testing", "Background + Training", "AUC Train", "Sensitivity Train","Specificity Train","Threshold Train", "Maximun TSS Train","Minimun ROC Distance Train","Threshold Method Train", "AUC Test","Threshold Test","Sensitivity Test"       
+, "Specificity Test","Matthews Correlation Test", "LR_pos_test"      
+, "LR_neg_test","kappa_index_test" )
+  DT::datatable(eval)
 }
 ```
 <br>
 <br>
 <br>
+
   
-#### Predictors Used in Modeling Process 
-Through our variable selection and ranking process and the removal of correlated variables only a selected number of the 26 total variables were used in the modeling process. The table belows shows all the variables in ranked order of importance and shows if they were used in the modeling process.   
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(length(include(csv,"predictorImportance.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
-}else{
-  DT::datatable(read.csv(include(csv,"predictorImportance.csv")))
-}
-```
-  
-#### Median value
-  The median result across the 10 replicates is shown below. Per previous articles we have done, to be considered an accurate and stable model, we are looking for an ATAUC >= 0.7; STAUC < 0.15; cAUC >= 0.4, and ASD15 <= 10
+### Statistics for Median of the Model Runs
+The median result across the replicates is shown below. Per previous articles we have done, to be considered an accurate and stable model, we are looking for an AUC >= 0.7; SDAUC < 0.15; and ASD15 <= 10
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics.csv")) == 0){
   print("Models were not are to be ran on this species due to insufficent number of samples")
 }else{
   # evalMetric <- include(csvs,"eval_metrics_rep.csv")
-  DT::datatable(read.csv(include(csv,"eval_metrics.csv")))
+  eval2 <- read.csv(include(csv,"eval_metrics.csv"))
+  eval2 <- eval2 %>%
+    dplyr::select(species, ATAUC, STAUC, ASD15, VALID)
+  
+  eval2$Testing <- testing
+  eval2$Training <- training
+  eval2$`Background + Training` <- testing + training
+  eval2 <- eval2 %>%
+    dplyr::select(species,Training,Testing, `Background + Training`,ATAUC, STAUC, ASD15, VALID)
+  colnames(eval2) <- c("Species","Training", "Testing", "Background + Training", "AUC","SDAUC","ASD15", "Valid")
+  DT::datatable(eval2)
 }
 ```
 <br>
@@ -89,11 +137,13 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 }else{
   tif <- list.files(path = baseDir, pattern = '.tif', recursive = TRUE, full.names = TRUE)
       median <- raster(include(tif, "prj_median"))
-      thrshold <- raster(include(tif, "spdist_thrsld"))
+      thrshold <- raster(include(tif, "spdist_thrsld_median"))
       sd <- raster(include(tif, "prj_std"))
       mess <- raster(include(tif, "messMapThres"))
+      kDense <- try(raster(include(tif, "kernalDensity")))
     }
 tmap_mode("view")
+tmap_options(basemaps = "OpenStreetMap")
 ```
 
 ### Maps of model outputs.
@@ -101,14 +151,14 @@ tmap_mode("view")
 
 #### Median
 
-Map of the median result from maxent models. Values in the key refer to probability of occurrence.
+The map below shows the median spatial result from the maxent model runs. Values in the key refer to the probability of occurrence. The occurrences used in the modeling process are represented by black dots and the attribute data associated with the points can be viewed by clicking on the dots.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("Models were not are to be ran on this species due to insufficent number of samples")
 }else{
   tm_shape(median) + tm_raster()+
     tm_shape(cleanPoints) + tm_dots()+
-    tm_scale_bar()
+    tm_scale_bar() 
 }
 ```
 
@@ -116,7 +166,7 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 
   
 #### Standard Deviation
-Map of the standard deviation result from maxent models
+Map of the standard deviation result across maxent model runs. Areas with a high standard deviation imply a limited agreement between the runs. This is most likely to occur in areas with low sample (occurrence point) density.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("Models were not are to be ran on this species due to insufficent number of samples")
@@ -129,7 +179,8 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   
   
 #### Threshold
-Map of the threshold (binary presence-absence) result from maxent models. This is the final map we use for the subsequent conservation gap analysis.
+Map of the threshold (binary presence-absence) result from the maxent models. This is the map used to create the genus level predicted species richness map.
+
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
@@ -137,28 +188,44 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 }else{
   palette1 <- c(  "#FFFFFF","#45B320")
   tm_shape(thrshold) + tm_raster(palette=palette1)+
-    tm_scale_bar()
+    tm_scale_bar() 
 }
 ```
 
-Map of the threshold (binary presence-absence) result from maxent models.
-
-#### Mess Map 
-The Mess map showns below takes the threshold map above and limits it's extent to areas that fall with 10% of the ranges of values present for all all points of the top predictor. Areas with value 1 are locations that are extrapolated and should be viewed with more septicism then those areas with value 2. All areas with value 2 fall with the observered range of the occurence data. 
+#### Mess Map
+The mess map identifies regions of the model that over project the top predictor. That is, areas of predicted presences that are above or below the observed range of the values assocaited with known occurrence data. There is less confidence that these areas are part of the distribution of the species because they are beyond the know conditions at what the species has been observed.
+Areas with value 0 equal species potential range.
+Areas with value 1 are regions that are potential over projected.
+Areas with value 2 are predicted presences locations within the know environmental limit of the species. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   print("Models were not are to be ran on this species due to insufficent number of samples")
 }else{
-  palette1 <- c("#FFFFFF","#fc4103","#7570b3")
-  mess[is.na(mess)] <-0 
-  messThres <-thrshold + mess 
-  tm_shape(messThres) + tm_raster(palette=palette1)+
-    tm_scale_bar()
+  mess[is.na(mess)] <- 0
+  mess1 <- mess + thrshold
+  palette1 <- c(  "#FFFFFF","#8c19b5", "#45B320")
+  tm_shape(mess1) + tm_raster(palette=palette1)+
+    tm_scale_bar() 
+  
+  
 }
 ```
 
+#### Density of Sampling locations 
+The map below show the relative concentration of occurence data across the predicted suitable habitat for the species. 
 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(length(include(tif, "kernalDensity")) == 0){
+  print("No kernal density raster was generated for this species")
+}else{
+  th2 <- thrshold
+  th2[th2 == 0] <- NA
+  kd1 <- kDense * th2
+  tm_shape(kd1) + tm_raster()+
+    tm_scale_bar() 
+}
+```
 
 ### Conservation gap analysis
 
@@ -174,8 +241,8 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 }else{
 tableEx <- dplyr::bind_cols(counts, read.csv(include(csv, "exsitu/summary.csv")))
 tableEx <- tableEx[c(7,1,2,3,4,5,6,8,9,10, 11)]
-names(tableEx) <- c("ID","totalRecords","totalUseful","totalGRecords", 
-                    "totalGUseful","totalHRecords","totalHUseful","SRS_ex", "GRS_ex","ERS_ex","FCS_ex")
+names(tableEx) <- c("ID","Total Records","Total Useful","Total G Records", 
+                    "Total G Useful","Total H Records","Total H Useful","SRSex", "GRSex","ERSex","FCSex")
 DT::datatable(tableEx)
 }
 ```
@@ -185,7 +252,7 @@ DT::datatable(tableEx)
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(counts$totalGUseful == 0){
+if(counts$`Total G Useful` == 0){
   print("There are no G points present so this process could not be completed.")
 }else{
   # pull in all g points.
@@ -199,7 +266,6 @@ if(counts$totalGUseful == 0){
    gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
    collgap1 <- thrshold + gapRaster
    GRSin <- thrshold + gapRaster2
-
   }else{
 print("There are no G points present so this process could not be completed.")
   } 
@@ -233,7 +299,7 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
     bufferInThres[is.na(bufferInThres)]<-0
     comb2 <-  bufferInThres + thrshold
     gGaps <- thrshold - bufferInThres 
-    writeRaster(x = gGaps, filename = paste0(sp_dir,'/gap_analysis/exsitu/gapMap.tif'))
+    writeRaster(x = gGaps, filename = paste0(sp_dir,'/gap_analysis/exsitu/gapMap.tif'),overwrite=TRUE)
   tm_shape(comb2) + tm_raster(palette = palette1)+
   tm_shape(gPoint) + tm_dots()+
     tm_scale_bar()
@@ -266,9 +332,9 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 }else{
 tableIn <- dplyr::bind_cols(counts, read.csv(include(csv, "insitu/summary.csv")))
 tableIn <- tableIn[c(7,1,2,3,4,5,6,11,12,13,14)]
-names(tableIn) <- c("ID","totalRecords","totalUseful","totalGRecords",
-                    "totalGUseful","totalHRecords","totalHUseful","SRS_in",
-                    "GRS_in","ERS_in","FCS_in")
+names(tableIn) <- c("ID","Total Records","Total Useful","Total G Records",
+                    "Total G Useful","Total H Records","Total H Useful","SRSin",
+                    "GRSin","ERSin","FCSin")
 DT::datatable(tableIn)
 }
 ```
@@ -294,7 +360,7 @@ gapRaster2 <- proArea %>%
   raster::crop(thrshold) %>%
   raster::mask(thrshold)
 
-      if(file.exists(include(tif, "spdist_thrsld"))){
+      if(file.exists(include(tif, "spdist_thrsld_median"))){
         gapRaster2[is.na(gapRaster2)] <- 0 
         thres1 <- thrshold
         thres1[thres1==0]<-NA
@@ -323,9 +389,15 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 }else{
   tableCo<- dplyr::bind_cols(counts, read.csv(include(csv, "combined/fcs_combined.csv")))
   tableCo <- tableCo[c(7,1,2,3,4,5,6, 8,9,10,11,12,13,14,15)]
+  colnames(tableCo) <- c("Species", "Total Records", "Total Useful", "Total G Records", "Total G Useful", "Total H Records", "Total H Useful", "FCSex","FCSin"          
+, "FCSc_min","FCSc_max","FCSc_mean"      
+,"FCSc_min_class" , "FCSc_max_class","FCSc_mean_class")
 DT::datatable(tableCo)
 }
 ```
 <br>
 <br>
 <br>
+
+This document was last last updated on `r Sys.Date()`
+

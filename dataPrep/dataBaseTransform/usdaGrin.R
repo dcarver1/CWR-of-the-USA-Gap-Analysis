@@ -97,24 +97,24 @@ df6 <- str_remove_all(df4$species, 'NA') %>%
   str_remove_all("__")
 df4$species <- df6
 
-# Set type based on value in status code 
-setType <- function(dataFrame){
-  if(is.na(dataFrame$sampleCategory)){
-    dataFrame$type <- "G"
-  }else(
-    if(dataFrame$sampleCategory == "INACTIVE"){
-      dataFrame$type <- "H"
-    }else{
-      dataFrame$type <- "G"
-    }
-      
-  )
-  
-  return(dataFrame)
-}
-
-df4 <- setType(df4)
-df4 <- subset(x = df4, select = -c(genus,spec,sub1,sub2) )
+# # Set type based on value in status code 
+# setType <- function(dataFrame){
+#   if(is.na(dataFrame$sampleCategory)){
+#     dataFrame$type <- "G"
+#   }else(
+#     if(dataFrame$sampleCategory == "INACTIVE"){
+#       dataFrame$type <- "H"
+#     }else{
+#       dataFrame$type <- "G"
+#     }
+#       
+#   )
+#   
+#   return(dataFrame)
+# }
+# 
+# df4 <- setType(df4)
+df4 <- subset(x = df4, select = -c(spec,sub1,sub2) )
 
 testLatLong <<- df4 %>%
   dplyr::select(c("latitude", "longitude")) %>%

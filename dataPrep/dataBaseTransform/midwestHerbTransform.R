@@ -54,7 +54,7 @@ df$sampleCategory <- dataThin$basisOfRecord
 df$country <- dataThin$country
 df$iso3 <- NA
 df$localityInformation <- NA
-df$biologicalStatus <- dataThin$improvement_status_code
+df$biologicalStatus <- NA
 df$collectionSource <- NA
 df$finalOriginStat <- NA 
 

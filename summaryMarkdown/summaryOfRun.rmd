@@ -26,12 +26,35 @@ include <- function (theList, toMatch){
                           theList, value=TRUE))
   return(matches)
 }
+# function for replacing na values with 0 
+removeNA = function(rasterPath){
+  print(rasterPath)
+  r1 <- raster::raster(rasterPath)
+  r1[is.na(r1)] <- 0
+  return(r1)
+}
+# gap maps. Convert -1 to 0 
+gapsToZero = function(rast){
+  rast[rast == -1] <- 0
+  return(rast)
+}
+
+# function for extending all rasters to an equal extent
+extend_all =function(rasters){
+  extent(Reduce(extend,rasters))
+}
+
+# function for adding all rasters together
+sum_all = function(rasters, extent){
+    re = lapply(rasters, function(r){extend(r, extent, value=0)})
+     Reduce("+",re)
+  }
+
+
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-
 # define run 
-run_version  <- 'test20191023'
 print(paste0("This is a summary of the ",run_version," modeling outputs."))
 ```
 
@@ -43,6 +66,18 @@ print(paste0("This is a summary of the ",run_version," modeling outputs."))
 # write.csv(x = lessThen3Points, file = paste0(base_dir, "/runSummaries/lessThen3Points.csv"))
 # write.csv(x = lessThen10Points, file = paste0(base_dir, "/runSummaries/lessThen10Points.csv"))
 ```
+
+```{r}
+# prep data to remove taxon with intraspecific species from this method. 
+rmSpec <- c("Phaseolus acutifolius","Phaseolus leptostachyus","Elymus elymoides","Leymus mollis","Phaseolus maculatus","Hordeum jubatum","Helianthus petiolaris","Ribes sanguineum","Phaseolus polystachios","Prunus serotina","Elymus trachycaulus","Hordeum brachyantherum","Ribes roezlii","Rubus hispidus","Ribes hudsonianum","Helianthus nuttallii","Helianthus pauciflorus","Humulus lupulus","Allium geyeri","Ribes oxyacanthoides","Fragaria x ananassa","Helianthus occidentalis","Fragaria virginiana","Elymus lanceolatus","Fragaria vesca","Helianthus niveus","Helianthus praecox","Prunus fasciculata","Ribes malvaceum","Rubus arcticus","Vitis rotundifolia","Fragaria chiloensis","Ribes aureum","Acer saccharum","Allium victorialis","Elymus stebbinsii","Helianthus debilis","Ipomoea ternifolia","Lactuca tatarica","Prunus ilicifolia","Prunus pumila","Ribes californicum","Rubus idaeus","Saccharum brevibarbe","Vitis aestivalis","Vitis cinerea","Zizania aquatica","Zizania palustris", "Allium schoenoprasum","Elymus glabriflorus",
+"Elymus glaucus","Ipomoea cordatotriloba","Juglans major","Juglans microcarpa","Leymus salina","Prunus virginiana","Ribes cereum","Rubus ursinus","Tripsacum dactyloides","Vaccinium crassifolium","Vaccinium erythrocarpum","Vaccinium ovalifolium"
+)
+
+```
+
+
+
+
 ### Species Richness map 
  We were able to model 364 species from 65 genera 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -55,24 +90,25 @@ for(i in genera){
   tif <- list.files(path = paste0(gap_dir,"/",i),
                     pattern = '.tif', recursive = TRUE, full.names = TRUE)
   thres <- include(tif, "richnessMap")
-  thres <- thres[length(thres)] # richness map is output by date. This is select the last element in the list which is the most recent. 
+  thres <- thres[length(thres)] # richness map is output by date. This is select the last element in the list which is the most recent.
   if(length(thres) > 0){
     vector[n] <- thres
     n = n+1
   }
 }
 
+
 # set extent equal to NAshp 
 rasterList <- lapply(X = vector, FUN = removeNA)
 
-# all all rasters together 
+# all all rasters together
 r_sum = sum_all(rasterList, extend_all(rasterList))
 #Replace all zeros with NA
 r_sum[r_sum == 0]<-NA
 
 # save content 
-try(qtm(r_sum))
-try(writeRaster(x = r_sum, filename = paste0(base_dir,"/runSummaries/richnessMap.tif"), overwrite=TRUE))
+#try(qtm(r_sum))
+try(writeRaster(x = r_sum, filename = paste0(base_dir,"/runSummaries/richnessMap_",Sys.Date(),".tif"),  overwrite=TRUE))
 
 
 ```
@@ -138,6 +174,98 @@ try(qtm(inGap))
 try(writeRaster(x = inGap, filename = paste0(base_dir,"/runSummaries/insituGap.tif"), overwrite=TRUE))
 ```
 
+### protect areas 
+```{r}
+
+
+  #   # Read polygon feature class shapefile
+  #   sdata <- readOGR("D:/cwrNA/parameters/protectedAreas/WDPA_Mar2020-shapefile/WDPA_Mar2020-shapefile-polygons.shp")
+  # # determine specific countries of interest
+  #   t1 <- unique(naSHP$ISO_A3)
+  #   sdata2 <- sdata[sdata$ISO3 %in% t1,]
+  # 
+  #   #write raster to use from now on
+  #   writeOGR(obj = sdata2,dsn ="D:/cwrNA/parameters/protectedAreas/WDPA_Mar2020-shapefile",
+  #   layer = "WDPA_na", driver="ESRI Shapefile", check_exists=TRUE, 
+  #        overwrite_layer=TRUE)
+    
+    ### this works at least. I've got the file writen, Now it's just a matter of filtering as needed. check in with chyrs about how to make that happen. 
+    
+    # filter out marine reserves 
+    # sdata3 <- sdata2[sdata2$MARINE == 0,]
+    # read in protected area shp 
+    sd <- readOGR("D:/cwrNA/parameters/protectedAreas/WDPA_Mar2020-shapefile/WDPA_na.shp")
+    # filter per instructions in data in breif 
+#including only those terrestrial and coastal reserves marked as designated, inscribed, #or estab-lished. 
+  sd1 <- sd[sd@data$STATUS != "Proposed",]
+
+    # read in richness raster 
+    #r2 <- raster::raster(x = "D:/cwrNA/runSummaries/richnessMap_2020-03-18.tif")
+# 
+#     #remove all extra species 
+         occData1 <- read.csv("D:/cwrNA/runSummaries/allspeciesOccurrenceData2020-03-26.csv")
+    #occData[!occData$taxon %in% rmSpec, ]
+
+    
+    # create a spatial point dataframe of the occData
+    coords <- occData1 %>% dplyr::select(longitude, latitude)
+    coords <- coords[complete.cases(coords),]
+    coords$longitude <- as.numeric(coords$longitude)
+    coords$latitude <- as.numeric(coords$latitude)
+    coords <- coords[complete.cases(coords),]
+
+
+    data2 <- occData1 %>% dplyr::select(taxon, longitude, latitude)
+    data2 <- data2[complete.cases(data2),]
+    data2$longitude <- as.numeric(data2$longitude)
+    data2$latitude <- as.numeric(data2$latitude)
+    data2 <- data2[complete.cases(data2),]
+
+
+    sp1 <- sp::SpatialPointsDataFrame(coords = coords, data= data2)
+    crs(sp1) <- crs(sd1)
+
+    pVal<- sp::over(x = sp1, y = sd1)
+
+    sp2 <- cbind(data2, pVal)
+
+    sp3 <- sp2 %>%
+      dplyr::group_by(WDPAID)%>%
+      dplyr::summarise(totalSpecies = length(unique(taxon)),)
+    # join back to keep all preserve data
+    sp4 <- dplyr::left_join(x = sp3, y=sd1@data, by= ("WDPAID"))
+
+    write.csv(sp4,file = "D:/cwrNA/runSummaries/speciesCountPerProtectedArea.csv")
+
+    # 
+    # # Extract raster values to list object
+    # r.vals <- extract(r2, sd1)
+    # 
+    # # saveRDS(r.vals, file = "D:/cwrNA/runSummaries/extractedValues.rds")
+    # # 
+    # # 
+    # # View(head(r.vals))
+    # # Use list apply to calculate mean for each polygon
+    # r.max <- lapply(r.vals, FUN=max)
+    # r.mean <- lapply(r.vals, FUN=mean)
+    # r.std <- lapply(r.vals, FUN=sd)
+    # r.range <- lapply(r.vals, FUN=range)
+    # # Join mean values to polygon data
+    # sd2 <- sd1@data
+    # sd2$maxSpecies <- NA
+    # sd2$meanSpecies <- NA
+    # sd2$sdSpecies <- NA
+    # sd2$rangeSpecies <- NA
+    # for(i in 1:length(r.max)){
+    #   sd2$maxSpecies[i] <- r.max[[i]]
+    #   sd2$meanSpecies[i] <-  r.mean[[i]]
+    #   sd2$sdSpecies[i] <- r.std[[i]]
+    #   sd2$rangeSpecies[i] <- r.range[[i]]
+    # }
+    # write.csv(x = sd2, file = "D:/cwrNA/runSummaries/predictedSpeciesPerProtectedArea.csv")
+
+
+```
 ### Exsitu gap map 
 so this one is a little goofy. Of the 360ish species we were able to model only 121 species had any useful g points. 
 - I expect there is an error within the data transformation step that is causing this. For example only 1 of cucurbita species had any g points. Not the case with our more quality dataset. 
@@ -147,13 +275,24 @@ so this one is a little goofy. Of the 360ish species we were able to model only 
 # exsitu 
 files <- list.files(path = gap_dir , pattern = 'gapMap.tif', recursive = TRUE, full.names = TRUE)
 files <- include(files, run_version)
+# add step to remove the rmSpecies 
 
-# compline all these rasters 
-# set extent equal to NAshp 
+for(q in rmSpec){
+  index <- grep(pattern = paste0(q, "/"), x = files,fixed = TRUE)
+  if(length(index) == 1){
+      files <- files[-index]
+  }
+}
+#There is a .xml file for one of the raster which I need to drop. 
+files <- files[-54]
+
+#replace all na with 0 
 rasterList1 <- lapply(X = files, FUN = removeNA)
+# replace all negtive 1 with 0 
+rasterList2 <- lapply(X = rasterList1, FUN = gapsToZero)
 
 # all all rasters together 
-g_sum = sum_all(rasterList1, extend_all(rasterList1))
+g_sum = sum_all(rasterList2, extend_all(rasterList2))
 #Replace all zeros with NA
 g_sum[g_sum == 0]<-NA
 
@@ -161,28 +300,26 @@ g_sum[g_sum == 0]<-NA
 try(qtm(g_sum))
 try(writeRaster(x = g_sum, filename = paste0(base_dir,"/runSummaries/gapMap.tif"), overwrite=TRUE))
 
-# set extent equal to NAshp 
-
-# add all of them together. 
 
 ```
 
 
 
 ### EOO AOO summary 
+skipping for now 20200206
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-# Pull all species level listingValues csvs 
+# Pull all species level listingValues csvs
 files <- list.files(path = gap_dir , pattern = 'listingValues.csv', recursive = TRUE, full.names = TRUE)
 files <- include(files, run_version)
 
-# compile into a single dataframe 
+# compile into a single dataframe
 df <- data.frame()
 for(i in 1:length(files)){
   df <- rbind(df,read.csv(files[i]))
 }
 write.csv(x = df, file = paste0(base_dir, "/runSummaries/eooAooData.csv"))
-# summarise for counts of each. 
+# summarise for counts of each.
 Eoo <- df %>%
   group_by(EOO.Status, AOO.Status) %>%
   dplyr::summarise('Number of Species' = n())
@@ -196,3 +333,76 @@ for(i in 1:nrow(Eoo)){
 DT::datatable(Eoo,options = list(pageLength = 15) )
 write.csv(x = Eoo, file = paste0(base_dir, "/runSummaries/eooAooDataSummary.csv"))
 ```
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+
+modelingData <-occData
+
+modelingData <- modelingData[!modelingData$taxon %in% rmSpec,]
+
+speciesList <- speciesList[!speciesList %in% rmSpec ]
+```
+
+Extras to compile final datasets 
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# Pull all species level listingValues csvs
+files <- list.files(path = gap_dir , pattern = paste0('species_summary_',run_version,'.csv'), recursive = TRUE, full.names = TRUE)
+
+# compile into a single dataframe
+df <- data.frame()
+for(i in 1:length(files)){
+  df <- rbind(df,read.csv(files[i]))
+}
+
+write.csv(x = df, file = paste0(base_dir, "/runSummaries/species_summary_",run_version, ".csv"))
+```
+
+
+Pull all cleaned modeling data 
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# Pull all species level listingValues csvs
+files <- list.files(path = gap_dir , pattern = paste0('eval_metrics.csv'), recursive = TRUE, full.names = TRUE)
+files <- include(files, run_version)
+
+
+
+
+# compile into a single dataframe
+df <- data.frame(matrix(nrow = 0, ncol = 20))
+for(i in 1:length(files)){
+  t5 <- try(read.csv(files[i]))
+  if(ncol(t5) > 10){
+      df <- rbind(df,t5)
+  }
+}
+df <- df %>%
+  dplyr::select("species","ATAUC",  "AUCtest", "nAUC","cAUC","sensi_train" ,"speci_train","threshold_train", "max.TSS_train", "minROCdist_train", "threshold_test","sensi_test","speci_test", "matthews.cor_test", "LR_pos_test" , "LR_neg_test", "kappa_index_test", "STAUC", "ASD15", "VALID")
+
+
+write.csv(x = df, file = paste0(base_dir, "/runSummaries/median_summary_",run_version, ".csv"))
+```
+
+
+old
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# Pull all species level listingValues csvs
+files <- list.files(path = gap_dir , pattern = paste0('median_summary_',run_version,'.csv'), recursive = TRUE, full.names = TRUE)
+
+#files <- include(theList = )
+
+# compile into a single dataframe
+df <- data.frame()
+for(i in 1:length(files)){
+  df <- rbind(df,read.csv(files[i]))
+}
+
+#df <- df %>% filter(!Species %in% rmSpec )
+
+write.csv(x = df, file = paste0(base_dir, "/runSummaries/median_summary",run_version, ".csv"))
+
+```
+
+

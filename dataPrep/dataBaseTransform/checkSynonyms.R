@@ -49,6 +49,7 @@ join2 <- dplyr::left_join(x = secondary, y = syn2 ,by = c("taxon" = "synonym"), 
 
 # if synonym in not NA, replace taxon with Taxon GRIN Global 
 join2$taxon <- join2$`Taxon_GRIN Global_2019 final`
+# add step to replace genus... not sure how 
 
 ### duplicate issues 
 issues <- join2 %>% 

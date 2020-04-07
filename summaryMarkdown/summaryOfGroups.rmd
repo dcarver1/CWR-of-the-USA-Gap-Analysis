@@ -1,0 +1,170 @@
+---
+title: Summary of maxent modeling results and conservation gap analysis results per taxon
+author: Colin Khoury, Daniel Carver
+output:
+  html_document:
+  code_folding: hide
+highlight: tango
+theme: yeti
+toc: no
+toc_depth: 4
+toc_float:
+  collapsed: yes
+smooth_scroll: no
+---
+
+# this is not really a 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# function for flitering list based on character values
+include <- function (theList, toMatch){
+  matches <- unique (grep(paste(toMatch,collapse="|"),
+                          theList, value=TRUE))
+  return(matches)
+}
+
+# function for replacing na values with 0
+removeNA = function(rasterPath){
+  r1 <- raster::raster(rasterPath)
+  r1[is.na(r1)] <- 0
+  return(r1)
+}
+
+# function for extending all rasters to an equal extent
+extend_all =function(rasters){
+  extent(Reduce(extend,rasters))
+}
+
+# function for adding all rasters together
+sum_all = function(rasters, extent){
+    re = lapply(rasters, function(r){extend(r, extent, value=0)})
+    Reduce("+",re)
+  }
+
+```
+
+
+```{r}
+# prep data to remove taxon with intraspecific species from this method. 
+rmSpec <- c("Phaseolus acutifolius","Phaseolus leptostachyus","Elymus elymoides","Leymus mollis","Phaseolus maculatus","Hordeum jubatum","Helianthus petiolaris","Ribes sanguineum","Phaseolus polystachios","Prunus serotina","Elymus trachycaulus","Hordeum brachyantherum","Ribes roezlii","Rubus hispidus","Ribes hudsonianum","Helianthus nuttallii","Helianthus pauciflorus","Humulus lupulus","Allium geyeri","Ribes oxyacanthoides","Fragaria x ananassa","Helianthus occidentalis","Fragaria virginiana","Elymus lanceolatus","Fragaria vesca","Helianthus niveus","Helianthus praecox","Prunus fasciculata","Ribes malvaceum","Rubus arcticus","Vitis rotundifolia","Fragaria chiloensis","Ribes aureum","Acer saccharum","Allium victorialis","Elymus stebbinsii","Helianthus debilis","Ipomoea ternifolia","Lactuca tatarica","Prunus ilicifolia","Prunus pumila","Ribes californicum","Rubus idaeus","Saccharum brevibarbe","Vitis aestivalis","Vitis cinerea","Zizania aquatica","Zizania palustris", "Allium schoenoprasum","Elymus glabriflorus",
+"Elymus glaucus","Ipomoea cordatotriloba","Juglans major","Juglans microcarpa","Leymus salina","Prunus virginiana","Ribes cereum","Rubus ursinus","Tripsacum dactyloides","Vaccinium crassifolium","Vaccinium erythrocarpum","Vaccinium ovalifolium"
+)
+```
+
+
+
+# define dataset that will be used. 
+```{r}
+d1 <- read.csv("D:/cwrNA/parameters/USA_cropWildRelativeInventory/CWRofUSA_Inventory_2020_02_26.csv")
+
+d2 <- read.csv("D:/cwrNA/speciesList/CWRoftheUSA_synonyms20191114.csv")
+d2 <- unique(d2$Taxon_GRIN.Global_2019.final)
+
+d1 <- d1[d1$Taxon_GRIN.Global_2019.final %in% d2,]
+
+pGroups <- unique(d1$Priority.2019)
+
+cGroups <- unique(d1$Crop.or.WUS.use_1,)
+```
+
+drop all species that are in the exclusion list 
+```{r}
+d1 <- d1[!d1$Taxon_GRIN.Global_2019.final %in% rmSpec,]
+
+```
+
+
+## process for pulling threshold data from speices in a list 
+- loop over all groups 
+- find all species within the group 
+- use compiling functions below 
+
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# process for priority groups 
+vector2 <- vector
+
+
+for(j in pGroups){
+  n= 1
+  vector <- c()
+  sList <- d1 %>%
+    dplyr::filter(Priority.2019 == j) %>%
+    dplyr::select(Taxon_GRIN.Global_2019.final)
+  # determine number of genera 
+  gl <- sList %>% tidyr::separate(Taxon_GRIN.Global_2019.final, into = c("genus", "other"), sep= " ") %>%
+    dplyr::group_by(genus) %>% dplyr::summarise(count = n()) %>%
+    dplyr::select(genus)
+  speciesList <- unique(sList$Taxon_GRIN.Global_2019.final)
+
+  for(k in gl$genus){
+    dir <- paste0(gap_dir, "/", k)
+    sl <- include(theList = speciesList, toMatch = k)
+    for(i in sl){
+      tif <- list.files(path = paste0(dir,"/",i,"/",run_version),
+                    pattern = '.tif', recursive = TRUE, full.names = TRUE)
+      thres <- include(tif, "spdist_thrsld")
+      if(length(thres) > 0){
+        vector[n] <- thres
+        n = n+1 
+      }
+    }
+  }
+  print("compiling raster data")
+  rasterList <- lapply(X = vector, FUN = removeNA)
+
+  r_sum = sum_all(rasterList, extend_all(rasterList))
+  #Replace all zeros with NA
+  r_sum[r_sum == 0]<-NA
+  try(raster::writeRaster(x = r_sum, filename = paste0("D:/cwrNA/runSummaries", "/", j,"_",Sys.Date() ,".tif"), overwrite=TRUE))
+  print(paste0(j ," has been produced"))
+}
+
+
+```
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# process for priority groups 
+
+for(j in cGroups){
+  n= 1
+  vector <- c()
+  sList <- d1 %>%
+    dplyr::filter(Crop.or.WUS.use_1 == j) %>%
+    dplyr::select(Taxon_GRIN.Global_2019.final)
+  # determine number of genera 
+  gl <- sList %>% tidyr::separate(Taxon_GRIN.Global_2019.final, into = c("genus", "other"), sep= " ") %>%
+    dplyr::group_by(genus) %>% dplyr::summarise(count = n()) %>%
+    dplyr::select(genus)
+  speciesList <- unique(sList$Taxon_GRIN.Global_2019.final)
+
+  for(k in gl$genus){
+    dir <- paste0(gap_dir, "/", k)
+    sl <- include(theList = speciesList, toMatch = k)
+    for(i in sl){
+      tif <- list.files(path = paste0(dir,"/",i,"/",run_version),
+                    pattern = '.tif', recursive = TRUE, full.names = TRUE)
+      thres <- include(tif, "spdist_thrsld")
+      if(length(thres) > 0){
+        vector[n] <- thres
+        n = n+1 
+        print(paste0(i, " has been added to ", j))
+      }
+    }
+  }
+  print("running compiling step")
+  rasterList <- lapply(X = vector, FUN = removeNA)
+
+  r_sum = sum_all(rasterList, extend_all(rasterList))
+  #Replace all zeros with NA
+  r_sum[r_sum == 0]<-NA
+  try(raster::writeRaster(x = r_sum, filename = paste0("D:/cwrNA/runSummaries", "/", j,"_",Sys.Date() ,".tif"), overwrite=TRUE))
+  print(paste0(j ," has been produced from ", length(speciesList), " unique species"))
+}
+
+
+```
+
+```{r}
+print
+```
