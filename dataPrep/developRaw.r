@@ -1,13 +1,11 @@
 ###
-# script to produce the raw data for each species
+# Produces the raw data for each species
+# dan.carver@carved.com
+# 20200414
 ###
 
-#troubleshooting
-#species <- species1
-
 developRaw <- function(species) {
-    # from the occurence data at the species level select specific species and write out rew dataset
+    # from the occurence data select specific species and write out raw dataset
     rawData <<- genusOcc[genusOcc$taxon == species, ]
     write.csv(rawData, file = paste0(sp_dir,"/occurrences/rawData.csv"),row.names = FALSE)
 }
-

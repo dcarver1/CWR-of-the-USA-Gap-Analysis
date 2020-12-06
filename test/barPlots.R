@@ -5,25 +5,10 @@
 ###
 library(plotly)
 # read in metrics data 
-d1 <- read.csv(file = "D:/cwrNA/parameters/barCharts/allMetricData2020-03-20.csv")
-
-#function for ploting
-plot2<- function(df){
-  fig <- plot_ly(data = df, x = ~HP, y = ~category,
-                 type = 'bar', orientation = 'h', name = "HP", 
-                 marker = list(color = 'rgba(204, 44, 0, 0.6)'
-                 ))%>% 
-    add_trace(x = ~MP, name = 'MP',
-              marker = list(color = 'rgba(255, 145, 0, 0.6)'
-              ))%>% 
-    add_trace(x = ~LP, name = 'LP',
-              marker = list(color = 'rgba(255, 234, 0, 0.6)'
-              ))%>% 
-    layout(barmode = 'stack',
-           xaxis = list(title = "Proportion of taxa (%)"),
-           yaxis = list(title =""))
-  return(fig)
-}
+d1 <- read.csv("D:/cwrNA/runSummaries/allMetricData2020-04-12forFigures.csv")
+dim(d1)
+d1 <- d1[d1$Included.in.summary.metrics == "Y",]
+dim(d1)
 
 #set wd 
 setwd("D:/cwrNA/parameters/barCharts")
@@ -33,22 +18,50 @@ setwd("D:/cwrNA/parameters/barCharts")
 
 
 ### generated the data structure I needed to test the plot method 
-d2 <- read.csv(file = "D:/cwrNA/parameters/barCharts/testchart.csv")
+#d2 <- read.csv(file = "D:/cwrNA/parameters/barCharts/testchart.csv")
+
+total <- length(d1$FCSc.mean.priority.category[!is.na(d1$FCSc.mean.priority.category)])
+tA <- d1 %>% 
+  group_by(FCSc.mean.priority.category) %>%
+  dplyr::summarise(count =n())%>%
+  dplyr::mutate(per=paste0(round(100*count/total,2)))
+tA <- tA[c(1,3,2),]
+tA
+tI <- d1 %>% 
+  group_by(FCSin.priority.category) %>%
+  dplyr::summarise(count =n())%>%
+  drop_na()%>% ### 20200411 added clause to drop na values. 
+  dplyr::mutate(per=paste0(round(100*count/total,2)))
+tI <- tI[c(1,3,2,4),]
+tE <- d1 %>% 
+  group_by(FCSex.priority.category) %>%
+  dplyr::summarise(count =n())%>%
+  drop_na()%>% ### 20200411 added clause to drop na values. 
+  dplyr::mutate(per=paste0(round(100*count/total,2)))
+tE <- tE[c(1,3,2,4),]
+
+df2 <- data.frame(matrix(nrow = 3, ncol = 5))
+colnames(df2) <- c("category" ,	"HP",	"MP",	"LP",	"SC")
+df2$category <- as.factor(c("FCSc-mean","FCSex","FCSin" ))
+df2[1,2:4] <- as.numeric(tA$per)
+df2[1,5] <- as.numeric(0)
+df2[2,2:5] <- as.numeric(tE$per)
+df2[3,2:5] <- as.numeric(tI$per)
 
 c1 <- factor(c("FCSin","FCSex","FCSc-mean"), levels = c("FCSin","FCSex","FCSc-mean"))
 
 
-pg <- plot_ly(x = rev(d2$HP), y = c1,
+pg <- plot_ly(x = rev(df2$HP), y = c1,orientation = 'h',
               type = 'bar',  name = "HP",
               marker = list(color = 'rgba(204, 44, 0, 0.6)'
               ))%>% 
-  add_trace(x = rev(d2$MP), name = 'MP',
+  add_trace(x = rev(df2$MP), name = 'MP',
             marker = list(color = 'rgba(255, 145, 0, 0.6)'
             ))%>% 
-  add_trace(x = rev(d2$LP), name = 'LP',
+  add_trace(x = rev(df2$LP), name = 'LP',
             marker = list(color = 'rgba(255, 234, 0, 0.6)'
             ))%>% 
-  add_trace(x = rev(d2$SC), name = 'SC',
+  add_trace(x = rev(df2$SC), name = 'SC',
             marker = list(color = 'rgba(3, 204, 0, 0.6)'
             ))%>% 
   layout(barmode = 'stack',
@@ -65,9 +78,11 @@ for(i in 1:length(uc)){
   p <- d1 %>%
     dplyr::filter(Category == uc[i])%>%
     dplyr::group_by(`FCSc.mean.priority.category`)%>%
-    dplyr::summarise(count =n()) %>%
+    dplyr::summarise(count =n())%>%
+    drop_na()%>% ### 20200411 added clause to drop na values. 
     dplyr::mutate(countT= sum(count)) %>%
     dplyr::mutate(per=paste0(round(100*count/countT,2)))
+  
   p1 <- p[,c(1,4)] %>% tidyr::spread(FCSc.mean.priority.category,per) %>%
     dplyr::select(HP,MP,LP)
   priorityGroup$category[i] <- as.character(paste0(uc[i], "  "))
@@ -80,9 +95,9 @@ write.csv(x = priorityGroup, file = "priorityGroup.csv")
 c1 <- factor(c("1C","1B","1A"), levels = c("1C","1B","1A"))
 
 pg <- plot_ly(x = rev(priorityGroup$HP), y = c1,
-        type = 'bar',  name = "HP",
-        marker = list(color = 'rgba(204, 44, 0, 0.6)'
-        ))%>% 
+              type = 'bar',  name = "HP",
+              marker = list(color = 'rgba(204, 44, 0, 0.6)'
+              ))%>% 
   add_trace(x = rev(priorityGroup$MP), name = 'MP',
             marker = list(color = 'rgba(255, 145, 0, 0.6)'
             ))%>% 
@@ -104,6 +119,7 @@ for(i in 1:length(uc)){
     dplyr::filter(Associated.crop.type.specific == uc[i])%>%
     dplyr::group_by(`FCSc.mean.priority.category`)%>%
     dplyr::summarise(count =n()) %>%
+    drop_na()%>% ### 20200411 added clause to drop na values. 
     dplyr::mutate(countT= sum(count)) %>%
     dplyr::mutate(per=paste0(round(100*count/countT,2)))
   p1 <- p[,c(1,4)] 
@@ -162,14 +178,15 @@ htmlwidgets::saveWidget(pg,file = "associateCropType.html")
 
 
 # assocaited crop 
-uc <- sort(unique(d1$Associated.crop))
+uc <- sort(unique(d1$Associated.crop.common.name))
 priorityGroup <- data.frame(matrix(ncol = 4, nrow = length(uc)))
 colnames(priorityGroup) <- c("category","HP", "MP","LP")
 for(i in 1:length(uc)){
   p <- d1 %>%
-    dplyr::filter(Associated.crop == uc[i])%>%
+    dplyr::filter(Associated.crop.common.name == uc[i])%>%
     dplyr::group_by(`FCSc.mean.priority.category`)%>%
     dplyr::summarise(count =n()) %>%
+    drop_na()%>% ### 20200411 added clause to drop na values. 
     dplyr::mutate(countT= sum(count)) %>%
     dplyr::mutate(per=paste0(round(100*count/countT,2)))
   p1 <- p[,c(1,4)] 
@@ -202,7 +219,7 @@ for(i in 1:length(uc)){
     }
   }
 }
-write.csv(x = priorityGroup, file = "associateCrop.csv")
+write.csv(x = priorityGroup, file = "Associated.crop.common.name.csv")
 
 
 uc1 <- rev(as.character(uc))
@@ -225,8 +242,7 @@ pg <- plot_ly(x = rev(priorityGroup$HP), y = c1,
          yaxis = list(title =""))
 
 pg
-priorityGroup
-htmlwidgets::saveWidget(pg,file = "associateCrop.html")
+htmlwidgets::saveWidget(pg,file = "Associated.crop.common.name.html")
 
 # redlist groups 
 
@@ -304,3 +320,25 @@ pg <- plot_ly(x = rev(priorityGroup$HP), y = c1,
 
 pg 
 htmlwidgets::saveWidget(pg,file = "redlistGroups.html")
+
+
+
+
+# ### older function did not work due to the ordering of factors issue 
+# #function for ploting
+# plot2<- function(df){
+#   fig <- plot_ly(data = df, x = ~HP, y = ~category,
+#                  type = 'bar', orientation = 'h', name = "HP", 
+#                  marker = list(color = 'rgba(204, 44, 0, 0.6)'
+#                  ))%>% 
+#     add_trace(x = ~MP, name = 'MP',
+#               marker = list(color = 'rgba(255, 145, 0, 0.6)'
+#               ))%>% 
+#     add_trace(x = ~LP, name = 'LP',
+#               marker = list(color = 'rgba(255, 234, 0, 0.6)'
+#               ))%>% 
+#     layout(barmode = 'stack',
+#            xaxis = list(title = "Proportion of taxa (%)"),
+#            yaxis = list(title =""))
+#   return(fig)
+# }

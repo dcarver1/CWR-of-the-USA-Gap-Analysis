@@ -8,7 +8,7 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrNA/occurrence_data2019_05_29/Genesys"
+base_dir <- "F:/nrelD/cwrNA/occurrence_data2019_05_29/Genesys"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/genesys-accessions-v18461d86381494a49a0faaa913f74c3da.csv")

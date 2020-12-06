@@ -4,7 +4,7 @@
 # carver.dan1@gmail.com
 ### 
 
-outLocation <- "D:/cwrNA/src"
+outLocation <- "F:/nrelD/GapAnalysis"
 setwd(outLocation)
 files <- sort(list.files(path = outLocation, pattern = "\\.r$",full.names = TRUE,recursive = TRUE,ignore.case = TRUE))
 

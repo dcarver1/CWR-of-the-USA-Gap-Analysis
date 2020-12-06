@@ -3,14 +3,22 @@
 # 20200408 
 # dan.carver@carverd.com 
 ### 
+library("dplyr")
+
+
+baseDir <- "F:/nrelD/cwrNA"
+# read in occurrence data
+occData <- data.table::fread(paste0(baseDir, "/occurrence_data2019_05_29/combinedOccurance2020-07-21a.csv"),
+                             header = TRUE)
+occData <<- occData[,2:ncol(occData)]
 
 
 # occurrence data from data prep step 
-d1 <- read.csv("D:/cwrNA/parameters/USA_cropWildRelativeInventory/CWRofUSA_Inventory_2020_02_26.csv", header = TRUE)
+d1 <- read.csv(paste0(baseDir,"/parameters/USA_cropWildRelativeInventory/CWRofUSA_Inventory_2020_02_26.csv"), header = TRUE)
 fL <- d1 %>% dplyr::select(Taxon_GRIN.Global_2019.final)
 
 # pull in original data from the project 
-CWRuslist <- read.csv("D:/cwrNA/speciesList/CWRoftheUSA_synonyms20191114.csv")
+CWRuslist <- read.csv(paste0(baseDir,"/speciesList/CWRoftheUSA_synonyms20191114.csv"))
 tL <- CWRuslist %>% dplyr::select(Taxon_GRIN.Global_2019.final)
 
 # join to select species that are on both list 
@@ -35,7 +43,7 @@ for(i in genera){
     dplyr::filter(genus == i)
   spList2 <- df1[grep(pattern = i,x = df1$species),]
   for(j in spList2){
-    sp_dir <- paste0("D:/cwrNA/gap_analysis/",i,"/",j,"/",run_v)
+    sp_dir <- paste0("F:/nrelD/cwrNA/gap_analysis/",i,"/",j,"/",run_v)
     # test for file and read it as object 
     if(file.exists(paste0(sp_dir, "/counts.csv"))){
       ct <- read.csv(paste0(sp_dir, "/counts.csv"))
@@ -49,13 +57,13 @@ for(i in genera){
       gE <- read.csv(paste0(sp_dir, "/gap_analysis/exsitu/summary.csv"))
       #assign classes 
       if (gE$FCS < 25) {
-        gE$Exsitu_Score <- "HP"
+        gE$Exsitu_Score <- "UP"
       } else if (gE$FCS >= 25 & gE$FCS < 50) {
-        gE$Exsitu_Score <- "MP"
+        gE$Exsitu_Score <- "HP"
       } else if (gE$FCS >= 50 & gE$FCS < 75) {
-        gE$Exsitu_Score <- "LP"
+        gE$Exsitu_Score <- "MP"
       } else {
-        gE$Exsitu_Score <- "SC"
+        gE$Exsitu_Score <- "LP"
       }
       if(n==1){
         gEAll <- gE 
@@ -67,13 +75,13 @@ for(i in genera){
       gI <- read.csv(paste0(sp_dir, "/gap_analysis/insitu/summary.csv")) %>%
         dplyr::select("ID","SRS.NTOTAL",	"SRS.ProTotal","SRS.SRS","SRS.SRS","GRS","ERS","FCS")
       if (gI$FCS < 25) {
-        gI$Insitu_Score <- "HP"
+        gI$Insitu_Score <- "UP"
       } else if (gI$FCS >= 25 & gI$FCS < 50) {
-        gI$Insitu_Score <- "MP"
+        gI$Insitu_Score <- "HP"
       } else if (gI$FCS >= 50 & gI$FCS < 75) {
-        gI$Insitu_Score <- "LP"
+        gI$Insitu_Score <- "MP"
       } else {
-        gI$Insitu_Score <- "SC"
+        gI$Insitu_Score <- "LP"
       }
       if(n==1){
         gIAll <- gI 
@@ -128,18 +136,18 @@ for(i in 1:nrow(rlAll)){
     rlAll$eVal[i] <- 4 }
   if (rlAll$EOO.Status[i] == "Critically Endangered (CR)"){
     rlAll$eVal[i] <- 5 }
-
+  
   if(rlAll$eVal[i] >= rlAll$aVal[i]){
     stat <- rlAll$EOO.Status[i]
   }else{
     stat <- rlAll$AOO.Status[i]
   }
   
-  rlAll$`Combined Status`[i] <- stat
+  rlAll$`Combined Status`[i] <- as.character(stat)
 }
 
 rlAll <- rlAll %>% dplyr::select(c("taxon","EOO.Area.km2","EOO.Status","AOO",
-                                    "AOO.adjusted.Minimum","AOO.Status","Combined Status"))
+                                   "AOO.adjusted.Minimum","AOO.Status","Combined Status"))
 # join based on full specices list to identify non present species 
 ctFull <- dplyr::full_join(x = df1,y=ctAll, by = "species")
 
@@ -160,127 +168,78 @@ allSummary$`Included in Summaries` <- !allSummary$species %in% noSS
 
 
 # change column names 
-allSummary <- allSummary %>% dplyr::select(-Exsitu_Score)
+allSummary <- allSummary %>% dplyr::select(-Exsitu_Score, -NA.,-NA..1,-NA..2)
 
 
 View(allSummary)
 #drop NA row 
 allSummary <- allSummary[2:nrow(allSummary),]
 
+# tna <- allSummary$totalUseful - allSummary$NA_occurrences
+# View(tna)
+# naMa <- allSummary$NA_occurrences - allSummary$SRS.NTOTAL
+# View(naMa)
 newCols <- c("Species",
-  "Total Records",	"Records with latitude",	"Records with longitude",	
-  "Records with coordinates",
- " Total G records",	'Total G records with coordinates',	
- "Total H Records",	"Total H with coordinates",
- "Number of unique data sources",
- "Total occurrences in North America",	"Total G occurrences in North America",
- "Total H occurrences in North America",	
- "SRSex",	"GRSex",	"ERSex",	"FCSex", "Exsitu Conservation Score",
- "Total occurrences in modeled area",	
- "Total occcurrens in modeled area in protected areas",
- "SRSin",	"GRSin",	"ERSin",	"FCSin", "Insitu Conservation Score",	
- 
- "FCSex_value",	"FCSin_value",	
- 
- "FCSc_min",	"FCSc_max",	"FCSc mean",
- 
- "FCSc_min priority category",	"FCSc_max priority category",	
- "FCSc mean priority category",
- 
- "EOO area km2", "EOO status",	"AOO",	"AOO adjusted minimum",	"AOO status",
- "Combined status", "Included in Summaries"
+             "Total Records",	"Records with latitude",	"Records with longitude",	
+             "Records with coordinates",
+             " Total G records",	'Total G records with coordinates',	
+             "Total H Records",	"Total H with coordinates",
+             "Number of unique data sources",
+             "Total occurrences in North America",	"Total G occurrences in North America",
+             "Total H occurrences in North America",	
+             "SRSex",	"GRSex",	"ERSex",	"FCSex", "Exsitu Conservation Score",
+             "Total occurrences in modeled area",	
+             "Total occcurrens in modeled area in protected areas",
+             "SRSin",	"GRSin",	"ERSin",	"FCSin", "Insitu Conservation Score",	
+             "FCSex_value",	"FCSin_value",	
+             "FCSc_min",	"FCSc_max",	"FCSc mean",
+             "FCSc_min priority category",	"FCSc_max priority category",	
+             "FCSc mean priority category",
+             "EOO area km2", "EOO status",	"AOO",	"AOO adjusted minimum",	"AOO status",
+             "Combined status", "Included in Summaries"
 )
 
 colnames(allSummary) <- newCols
-
-write.csv(x = allSummary, file = paste0("D:/cwrNA/runSummaries/allMetricData", Sys.Date(), ".csv"))
+View(allSummary)
+write.csv(x = allSummary, file = paste0(paste0(baseDir,"/runSummaries/allMetricData", Sys.Date(), ".csv")))
 
 
 # :) run from here
 
+
 # inport the CWR inventory and join the priority level and the crop type for futher summaries 
-cwrIn <- d1 %>% dplyr::select("Taxon_GRIN.Global_2019.final",
-                              "Crop.or.WUS.use_general", "Priority.2019",
-                              "Crop.or.WUS.use_1", 
-                              "Genus",
-                              "Associated_crop_common.name")
-colnames(cwrIn) <- c(
-  "name", 
-  "Associated crop type general",
-  "Category",
-  "Associated crop type specific",
-  "Genus",
-  "Associated crop"
-)
+cwrIn <- d1 %>% dplyr::select("Taxon_GRIN.Global_2019.final","Crop.or.WUS.use_general", 
+                              "Priority.2019","Crop.or.WUS.use_1","Genus","Associated_crop_common.name")
 
-
-cwrIn$name <- as.character(cwrIn$name) 
+cwrIn$name <- as.character(cwrIn$Taxon_GRIN.Global_2019.final) 
 useGroup <- dplyr::left_join(x = allSummary ,y= cwrIn, by= c("Species" = "name"))
 View(useGroup)
-# drop NA columns 
-#useGroup <- useGroup[useGroup$species != "",]
-#write.csv(x = useGroup, file = paste0("D:/cwrNA/runSummaries/allMetricData", Sys.Date(), ".csv"))
-
 ### adding the median model data to this data to double check true model runs for each species 
-allM <- read.csv("D:/cwrNA/runSummaries/median_summary_test20200203.csv")
+allM <- read.csv(paste0(baseDir,"/runSummaries/median_summary_test20200203.csv"))
 dt2 <- dplyr::left_join(useGroup, allM, by = c("Species" = "species"))
 
-
 ### generate content for figures 
-dFig <- dt2[,c(1,42,43,44,45,14,15,16,17,18,21:33,35,36,38,39)]
-colnames(dFig) <- c("Taxon",	"Category",	"Associated crop type general",	"Associated crop type specific",
-"Genus",	"Associated crop",	"SRSex",	"GRSex",	"ERSex",	"FCSex",	"FCSex priority category",
-"SRSin",	"GRSin",	"ERSin",	"FCSin",	"FCSin priority category",
-"FCSex value",	"FCSin value",
-"FCSc_min",	"FCSc_max",	"FCSc mean",	"FCSc_min priority category",
-"FCSc_max priority category",	"FCSc mean priority category",	"EOO status",
-"AOO status",	"Combined threat assessment status")
-write.csv(x = dFig, file = paste0("D:/cwrNA/runSummaries/allMetricData_ForFigures", Sys.Date(), ".csv"))
-
-
-
-write.csv(x = dt2, file = paste0("D:/cwrNA/runSummaries/allMetricData_withRuns", Sys.Date(), ".csv"))
-
-
-dt2a <- dt2 %>%
-  dplyr::filter("Total occurrences in North America" >= 25)%>%
-  group_by("Included in Summaries", "Valid")%>%
-  dplyr::summarise()
-View(dt2a)
-# 20200225 
-# pulling data for intraspecific species 
-spList2 <- 
-iSL <- occData %>%
-  filter(taxon %in% spList2)
-
-a <- iSL %>%
-  dplyr::group_by(taxon)%>%
-  dplyr::summarise(count = n())
-
-sort(unique(iSL$taxon))
-View(iSL)
-write.csv(x = iSL, file = "D:/cwrNA/troubleshooting/intraSpecificSpecsList2.csv")
-
-### pre 20200224
-
-
-spCount <- occData %>%
-  group_by(taxon, type)%>%
-  dplyr::summarise(count = n())
-write.csv(x = spCount, file = "D:/temp/spOccurrenceCount.csv")
+dFig <- dt2[,c(1,
+               43,42,44,45,46, 
+               14:18,
+               21:25,
+               26,27,
+               28:30,
+               31:33,
+               35,38,
+               39)]
+colnames(dFig) <- c("Taxon",
+                    "Category",	"Associated crop type general","Associated crop type specific", "Genus",	"Associated crop",
+                    "SRSex",	"GRSex",	"ERSex",	"FCSex",	"FCSex priority category",
+                    "SRSin",	"GRSin",	"ERSin",	"FCSin",	"FCSin priority category",
+                    "FCSex value",	"FCSin value",
+                    "FCSc_min",	"FCSc_max",	"FCSc mean",
+                    "FCSc_min priority category", "FCSc_max priority category",	"FCSc mean priority category",
+                    "EOO status", "AOO status",
+                    "Combined threat assessment status")
+View(dFig)
+write.csv(x = dFig, file = paste0(paste0(baseDir,"/runSummaries/allMetricData_ForFigures", Sys.Date(), ".csv")))
 
 
 
 
-
-
-# list on all known species 
-d1 <- read.csv("D:/cwrNA/speciesList/CWRoftheUSA_synonyms20191114.csv", header = TRUE)
-fullList <- unique(d1$Taxon_GRIN.Global_2019.final)
-write.csv(x = fullList, file = "D:/temp/speciesInCWRlist.csv")
-
-# find missing species 
-missingSpecies <- fullList[!fullList %in% spList2]
-
-# species present in occurence data that are not listed in CWR list 
-extraSpecies <- spList2[!spList2 %in% fullList]

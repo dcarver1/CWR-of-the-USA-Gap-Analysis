@@ -1,33 +1,23 @@
 ### 
 # Primary script for running CWRNA. This should be the only location where users have
 # to edit information.
-# 20190830
-# carver.dan1@gmail.com
+# 20200414
+# dan.carver@carverd.com
 ### 
-
-library(tidyverse)
-library(sp)
-library(raster)
-library(rgdal)
-library(tmap)
-library(devtools)
-#install_github("DFJL/SamplingUtil")
-library(geobuffer)
-library(SamplingUtil)
+pacman::p_load(tidyverse, sp, raster,rgdal, tmap, devtools,
+                randomForest,rgeos,VSURF,modelr,maxnet,
+               pROC,dismo,redlistr,fasterize, devtools, DT)
+#devtools::install_github("DFJL/SamplingUtil")
+#install_github("ccsosa/GapAnalysis")
+# devtools::install_github("hunzikp/velox")
+# devtools::install_github("valentinitnelav/geobuffer")
+`library(geobuffer)
 library(velox)
+library(SamplingUtil)
 tmap::tmap_mode("view")
-library(rgeos)
-library(randomForest)
-library(VSURF)
-library(modelr)
-library(maxnet)
-library(pROC)
-library(dismo)
-library(redlistr)
-library(fasterize)
-
+`
 # set all standard directories
-base_dir <<- "D:/cwrNA"
+base_dir <<- "F:/nrelD/cwrNA"
 repo_dir <<- paste0(base_dir , "/src")
 gap_dir <<- paste0(base_dir , "/gap_analysis")
 par_dir <<- paste0(base_dir , "/parameters")
@@ -35,7 +25,7 @@ occ_dir <<- paste0(par_dir, "/occurenceData")
 temp_dir <<- paste0(base_dir , "/TEMP")
 
 #set name of the run version 
-run_version <<- "test20200203"
+run_version <<- "temp20200915"
 
 #set adjustable parameters 
 numPoints <<- 2000 # maximun number of points used in model (use in subSampleCountry.R)
@@ -44,27 +34,33 @@ bufferDist <<- 50000 # used to define buffer distance in gBuffer.r ## had to cha
 set.seed(1234)
 
 # set all primary file sources
-bioVars <<- readRDS(paste0(par_dir,"/bioLayer_2.5/climate_vx.RDS"))
-countrySHP <<- readOGR(paste0(par_dir,"/ne_10m_admin/ne_10m_admin_0_countries.shp"),verbose = FALSE)
+# bioVars <<- readRDS(paste0(par_dir,"/bioLayer_2.5/climate_vx.RDS")) # need to install velox via dev tools. 
+
+### velox object is not working 
+rasters <- list.files(path = "D:/generalSpatialData/worldclim/30arcSec", full.names = TRUE, recursive = TRUE)
+rList <- c()
+for(i in 1:length(rasters)){
+  rList  <- append(x = rList, raster::raster(rasters[i]))
+}
+bioVars <<- raster::stack(rList)
+
+
+countrySHP <<- rgdal::readOGR(paste0(par_dir,"/ne_10m_admin/ne_10m_admin_0_countries.shp"),verbose = FALSE)
 # exculing pacific territories- runs near all species faster 
 #naSHP <<- readOGR(paste0(par_dir,"/northAmericaArea/northAmericaArea.shp"),verbose = FALSE)
 # include pacific territories 
-naSHP <<- readOGR(paste0(par_dir, "/allUSAArea/NorthAmerica_AllUSA.shp"), verbose = FALSE)
-
-#naSHP@data <- naSHP@data %>% dplyr::select(-c(1:94))# not sure what this is for?? 
-ecoReg <<- readOGR(paste0(par_dir,"/ecoregions/tnc_terr_ecoregions.shp"),verbose = FALSE)
-occData <<- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-04-03.csv",
-                              header = TRUE)
+naSHP <<- rgdal::readOGR(paste0(par_dir, "/allUSAArea/NorthAmerica_AllUSA.shp"), verbose = FALSE)
+ecoReg <<- rgdal::readOGR(paste0(par_dir,"/ecoregions/tnc_terr_ecoregions.shp"),verbose = FALSE)
+occData <- data.table::fread(paste0(base_dir, "/occurrence_data2019_05_29/combinedOccurance2020-07-21a.csv"),
+                             header = TRUE)
+occData <<- occData[,2:ncol(occData)]
 proArea <<- raster::raster(paste0(par_dir, "/protectedAreas/wdpa_reclass.tif"))
+### running with the PAUD dataset 
+#proArea <<- raster::raster(paste0(par_dir, "/protectedAreas/PAUDrasters/allAreas.tif"))
+
 layerDescription <<- read.csv(paste0(par_dir, "/layerDesrciptions.csv"))
 statesData <<- read.csv(paste0(par_dir, "/statePerTaxon/CWRofUSA_nativeareas_2020_1_30.csv"))
 statesSpObject <<- readRDS(paste0(par_dir, "/statesByCountry/gadmCanUsaMex_sp.rds"))
-
-# 20200317 issues with duplicate taxon presenting in different genera. 
-# Split the taxon name and use that to define the genus - species 
-
-occData1 <- occData %>%
-  tidyr::spread(key= )
 
 # Load the sources scripts
 source.files = list.files(repo_dir, ".[rR]$", full.names = TRUE, recursive = T)
@@ -79,59 +75,74 @@ source.files = source.files[ !grepl("summaryMarkdown", source.files) ]
 for(i in 1:length(source.files)){
   cat(i,"\n")
   source(source.files[i])
-  
 }
-# set counts csv 
-dfCounts <<- data.frame(matrix(NA, nrow = 1, ncol = 13))
-colnames(dfCounts) <-  c("species","totalRecords",	"hasLat", "hasLong","totalUseful", 	"totalGRecords",
-                         "totalGUseful","totalHRecords",	"totalHUseful","numberOfUniqueSources", 
-                         "NA_occurrences","NA_GUseful" ,"NA_HUseful")
+
+
 # set loop at genus level
 genera <- sort(unique(occData$genus))
-testGen <- genera[1:length(genera)]
-troubleGen <- genera[3:3]
-# Are you testing? Yes or No 
-# if testing all code will run regradless of if the output exists or not. 
-# if false code will test expected output, if that exist it will not run function. 
+testGen <- genera[c(32, 25, 47 )]
+testGen <- genera[49]
+testGen
+# three H. species to re run for fcsex Helianthus argophyllus Helianthus praecox subsp. hirtus Helianthus winteri
+
+# temp removal ,"Comarum palustre"  , "Daucus pusillus"                       
+
+### rerun for html. 
+# 2. For the 15 new htmls you sent me, the ex situ and in situ tables generally seem ok (for actual conservation metrics, and for those two in situ count fields), 
+# but the other summary counts werent updated (i.e. at top of html, and also as some of first fields in other tables). Could you update those and send them again? 
+spList <- c(
+  "Psidium guajava",
+  "Artocarpus altilis",
+  "Oryza latifolia",
+  "Solanum xanti",
+  "Allium textile",
+  "Elymus glaucus subsp. glaucus",
+  "Solanum douglasii",
+  "Elymus canadensis",
+  "Allium cernuum",
+  "Allium acuminatum",
+  "Nicotiana obtusifolia",
+  "Dasiphora fruticosa",
+  "Xanthosoma sagittifolium",
+  "Gossypium hirsutum",
+  "Rubus ursinus",
+  "Rubus ursinus subsp. ursinus",
+  "Tripsacum dactyloides var. dactyloides",
+  "Daucus pusillus",
+  "Leymus salina")
+# removed because run has been completed.   "Rubus ursinus subsp. macropetalus",
 
 
-#create list for error species 
-### 20200206 I should change this out to 
-lowOccurence <- list()
-lowOccurenceAll <- list()
-notModeled <- list()
-notModeledAll <- list()
-fullModelProcess <- list()
-ModeledAll <- list()
+# generate new html docs as values do not 
+# 1. There are 5 taxa that need new htmls. Dont know why but their numbers in new and old are different. Im assuming the new results are good, thus need new htmls for them. 
+
+spList <- c(
+  "Rubus ursinus",
+  "Rubus ursinus subsp. ursinus",
+  "Tripsacum dactyloides var. dactyloides",
+  "Daucus pusillus",
+  "Leymus salina"
+)
+
+spList <- "Solanum jamesii"
+
+#source("F:/nrelD/cwrNA/src/test/generateERSMaps.R")
+
+# drop all species that are not part of th 594 
+rmSpec <- c("Phaseolus acutifolius","Phaseolus leptostachyus","Elymus elymoides","Leymus mollis","Phaseolus maculatus","Hordeum jubatum","Helianthus petiolaris","Ribes sanguineum","Phaseolus polystachios","Prunus serotina","Elymus trachycaulus","Hordeum brachyantherum","Ribes roezlii","Rubus hispidus","Ribes hudsonianum","Helianthus nuttallii","Helianthus pauciflorus","Humulus lupulus","Allium geyeri","Ribes oxyacanthoides","Fragaria x ananassa","Helianthus occidentalis","Fragaria virginiana","Elymus lanceolatus","Fragaria vesca","Helianthus niveus","Helianthus praecox","Prunus fasciculata","Ribes malvaceum","Rubus arcticus","Vitis rotundifolia","Fragaria chiloensis","Ribes aureum","Acer saccharum","Allium victorialis","Elymus stebbinsii","Helianthus debilis","Ipomoea ternifolia","Lactuca tatarica","Prunus ilicifolia","Prunus pumila","Ribes californicum","Rubus idaeus","Saccharum brevibarbe","Vitis aestivalis","Vitis cinerea","Zizania aquatica","Zizania palustris", "Allium schoenoprasum","Elymus glabriflorus",
+            "Elymus glaucus","Ipomoea cordatotriloba","Juglans major","Juglans microcarpa","Leymus salina","Prunus virginiana","Ribes cereum","Rubus ursinus","Tripsacum dactyloides","Vaccinium crassifolium","Vaccinium erythrocarpum","Vaccinium ovalifolium"
+)
+occData <- occData[occData$taxon %in% rmSpec,]
+
+### running htmls for the non priority species 
+spList <- rmSpec
 
 
-
-
-### species list for issues on 20200303 
-x2<- allSummary %>%
-  dplyr::filter(is.na(GRS.x)) %>%
-  dplyr::distinct(species) # %>%
-  #filter(species == "Castanea x neglecta")
-spList <- unique(x2$species)[2:nrow(x2)]
-
-
-spList <- as.character(spl3$taxon)
-class(spList)
-  
-
-
-df5 <- data.frame(matrix(nrow = 0, ncol = 4))
-colnames(df5) <-  c(
-  "taxon","varNames","importance","includeInFinal"
-) 
-
-vector <- c()
-n = 1
 # select all species at the genus level and apply master script to run process
 beepr::beep_on_error(
-  for(i in genera){
+  for(i in testGen){
     t2a <- Sys.time()
-    genus <<- i
+    genus <<- i 
     if (!file.exists(paste0(gap_dir,"/summaryDocs"))) {dir.create(paste0(gap_dir,"/summaryDocs"),recursive=T)}
     allSpec <- occData %>%
       dplyr::filter(genus == i)
@@ -141,252 +152,81 @@ beepr::beep_on_error(
     # test for genus level folder.
     genFolder <- paste0(gap_dir, "/", i)
     if (!file.exists(genFolder)) {dir.create(paste0(genFolder),recursive=T)}
-    write.csv(allSpec, paste0(folder, "/", "raw",i,".csv"), row.names = FALSE)
+    #write.csv(allSpec, paste0(folder, "/", "raw",i,".csv"), row.names = FALSE)
     genusOcc <<- read.csv(paste0(folder, "/", "raw",i,".csv"))
     speciesList <<- sort(unique(allSpec$taxon))
-    write.csv(x = speciesList, file = paste0(gap_dir,'/', genus, "/", 'speciesList.csv'))
+    #write.csv(x = speciesList, file = paste0(gap_dir,'/', genus, "/", 'speciesList.csv'))
     
     #test
     ### 20200227 here for trouble specific species in spList 
     speciesList <- speciesList[speciesList %in% spList]
-    
-    
-    #useful code storing here at the moment 
-    #for(k in speciesList){
-    #   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/modeling/maxent/"),
-    #                       pattern = "predictorImportance.csv",
-    #                       recursive = TRUE, full.names = TRUE)
-    #   if(length(files) == 1){
-    #     t5 <- read.csv(files[1]) %>%
-    #       dplyr::mutate(taxon = k)%>%
-    #       dplyr::select(taxon,varNames,	importance,	includeInFinal)
-    #     df5 <- rbind(df5, t5)
-    #     }
-    #   }
-    # #}
-     
-      #testList <- speciesList[1:1]
-      #species1 <<- "Helianthus angustifolius"
-      #result_master = lapply(testList, master_run)
-      result_master = lapply(speciesList, master_run)
-      # need to include a call for the summary of all features at the genus level
-      # before the loop repeats
-      #dfCounts <<- dfCounts[-1,]
-      #write.csv(dfCounts, file = paste0(occ_dir,"/allCountsSummary",run_version,".csv"))
-      # call the summarize script for all runs
-      ### speciesList <<- testList
-      # try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfGenus.rmd"),  # file 2
-      #                          output_file =  paste("SummaryReport_", genus , Sys.Date(), ".html", sep=''),
-      #                          output_dir = paste0(gap_dir,"/", genus,"/summaryDocs")))
-      # t2b <- Sys.time()
-      # totalTime <- t2b-t2a
-      # print(paste0("the genus ", genus," includes ",
-      #              length(speciesList), " in a total of ", totalTime," minutes."))
-      # # #append error species to list
-      # if(length(na.omit(lowOccurence)) >0 ){
-      #   lowOccurenceAll <- append(lowOccurenceAll, na.omit(lowOccurence))
-      # }
-      # if(length(na.omit(notModeled)) >0 ){
-      #   notModeledAll <- append(notModeledAll, na.omit(notModeled))
-      # }
-      # if(length(na.omit(fullModelProcess)) >0 ){
-      #   ModeledAll <- append(ModeledAll, na.omit(fullModelProcess))
-      # }
-      # #Clear List of error species, as this information is saved on the
-      # lowOccurence <- list()
-      # notModeled <- list()
-      # fullModelProcess <- list()
-      
+    if(!is.na(speciesList[1])){
+      #calls the master function 
+      result_master = lapply(speciesList[1: length(speciesList)], master_run)
     }
- #else{
- #     print("no species of interest")
-    # }
- # }
-)
-colnames(df5) <- c("Taxon", "Predictor",	"Explanatory weight",	"Included in modeling"
-)
-write.csv(x = df5, 
-          file = paste0(base_dir, "/runSummaries/topPredictorsAll",Sys.Date(),".csv"))
 
 
-# there are duplicates in the df counts data. removing them here 
-dfC <- dfCounts%>% dplyr::distinct(species, .keep_all = TRUE)
-#write out dfCounts 
-write.csv(x = dfC, file = paste0(base_dir, "/runSummaries/allCounts.csv"))
+    # try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfGenus.rmd"),  # file 2
+    #                          output_file =  paste("SummaryReport_", genus , Sys.Date(), ".html", sep=''), 
+    #                          output_dir = paste0(gap_dir,"/", genus,"/summaryDocs")))
+    t2b <- Sys.time()
+    totalTime <- t2b-t2a
+    print(paste0("the genus ", genus," includes ",
+                 length(speciesList), " in a total of ", totalTime," minutes."))
 
-
-
-
-
-
-#20200326 
-# code for generating all species map
-
-# if(length(speciesList) >=1){
-#DANGER ---- delete existing model results
-# for(name in 1:length(speciesList)){
-#   path <- paste0(gap_dir,"/",genus, "/", speciesList[name],"/" , run_version)
-#   unlink(x = path,recursive = TRUE)
-# }
-# speciesList <- speciesList[!speciesList %in% rmSpec]
-# for(k in speciesList){
-#   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/"),
-#                       pattern = "spdist_thrsld_median.tif",
-#                       recursive = TRUE, full.names = TRUE)
-#   if(length(files)>0){
-#     vector[n] <- k
-#     n = n+1
-#   }
-# }
-#write.csv(x = vector, file = paste0(base_dir, "/runSummaries/speciesWithMaps.csv"))
-### the vector list generated here is then used to run the summary of run function once all no cumulative species are removed
-
-
-#20200313 
-#useful code storing here at the moment 
-# for(k in speciesList){
-#   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/"),
-#                       pattern = "cleanedModelingData.csv",
-#                       recursive = TRUE, full.names = TRUE)
-#   if(length(files) == 1){
-#     t5 <- read.csv(files[1])
-#     if(ncol(t5)==10){
-#       df5 <- rbind(df5,t5)
-#     }
-#     if(ncol(t5) == 9){
-#       t5$StateTest = NA
-#       df5 <- rbind(df5,t5)
-#     }
-#     if(class(files)=="character"){
-#       t5 <- data.frame(matrix(nrow = 1, ncol=10))
-#       colnames(t5) <-  c(
-#         "taxon","latitude", "longitude","type","databaseSource", 
-#         "hasLat","hasLong","hasLatLong","iso3_check"
-#       ) 
-#       t5$taxon=k
-#       t5$latitude=NA 
-#       t5$longitude=NA
-#       t5$type=NA
-#       t5$databaseSource=NA
-#       t5$hasLat=NA
-#       t5$hasLong=NA
-#       t5$hasLatLong=NA
-#       t5$iso3_check =NA
-#     }
-#   }
-# }
-
-
-
-
-
-
-
-
-
-#### 20200210 - I'd like to move this to either a 
-# write out model/not modeled lists 
-
-lowOccurenceAll1 <- lapply(lowOccurenceAll, function(x) x[!is.na(x)])
-lowOccurenceAll1 <- lowOccurenceAll1[lengths(lowOccurenceAll1) > 0]
-
-notModeledAll1 <- lapply(notModeledAll, function(x) x[!is.na(x)])
-notModeledAll1 <- notModeledAll1[lengths(notModeledAll1) > 0]
-
-ModeledAll1 <- lapply(ModeledAll, function(x) x[!is.na(x)])
-ModeledAll1 <- ModeledAll1[lengths(ModeledAll1) > 0]
-  
-  
-
-maxLength <- max(c(length(lowOccurenceAll1), 
-                   length(notModeledAll1),
-                   length(ModeledAll1)))
-
-df2 <- data.frame(matrix(ncol=3, nrow= maxLength,data = NA))
-colnames(df2) <- c("lowOccurrenceSpecies",
-                   "speciesNotModeled",
-                   "speciesSuccessfullyModeled"
+  }
 )
 
-lo2 <- c(lowOccurenceAll1, rep(NA, nrow(df2)-length(lowOccurenceAll1)))
-nMA <- c(notModeledAll1, rep(NA, nrow(df2)-length(notModeledAll1)))
-sSM <- c(ModeledAll1, rep(NA, nrow(df2)-length(ModeledAll1)))
 
-for(i in 1:length(lo2)){
-  df2$lowOccurrenceSpecies[i] <- lo2[[i]]
-  df2$speciesNotModeled[i] <- nMA[[i]]
-  df2$speciesSuccessfullyModeled[i] <- sSM[[i]]
+# pull all htmls from 15 species 
+
+
+# compile a list of all fcs data for troublesome species 
+fcs <- list.files(path = base_dir,pattern = "_Run20200203_2020-08-18.html", full.names = TRUE,  recursive = TRUE)
+folder <- "F:/nrelD/cwrNA/runSummaries/speciesLevelHTML"
+fcs <- include(theList = fcs, toMatch = spList)
+for(i in fcs){
+  ## currently set to only include the trouble shooting I've been working on today
+    file.copy(i, folder)
 }
-                            
-                                    
-write.csv(x = df2, file = paste0(gap_dir, "/summaryDocs/speciesModeledAndNot", Sys.Date(),".csv"))
 
-### combine the all species list, with counts of North American, then the columns of the bins 
-# list of all species names of interest 
-x1 <- read.csv("D:/cwrNA/parameters/statePerTaxon/CWRofUSA_nativeareas_2020_1_30.csv")
-x1 <- as.data.frame(unique(x1$name))
+### test to see what species are included
+ot <- sort(unique(occData$taxon))
+ot <- data.frame(taxon = sort(unique(occData$taxon)), summaryDoc = NA)
+n = 1 
+for(i in ot$taxon){
+   a <- include(fcs, i)
+   if(length(a) > 0){
+     ot$summaryDoc[n] <- a
+   }
+   n = n+1
+}
 
-#read in counts for all species
-x2 <- read.csv("D:/cwrNA/parameters/occurenceData/allCountsSummary.csv") %>%
-  dplyr::select(species, NorthAmericanPoint)
-## for some reason some species are making it on to this list twice. Dropping them here 
-x2 <- x2[!duplicated(x2$species),]
-x2 <- distinct(x2) 
+reRun <- rmSpec[!rmSpec %in% ot$taxon]
 
-# join x1 and x2 by species name 
-t1 <- dplyr::left_join(x = x1, y = x2, by = c("unique(x1$name)" = "species"))
-dim(t1) # this is about 14 values more, meaning there are some 
+# Ficus 
 
-## there might be a better way to do this but I want to move on here 
-l2 <- as.data.frame(df2$lowOccurrenceSpecies[!is.na(df2$lowOccurrenceSpecies)]) %>%
-  dplyr::mutate(lowOcc = 1) %>%
-  distinct()
-l3 <- as.data.frame(df2$speciesNotModeled[!is.na(df2$speciesNotModeled)]) %>%
-  dplyr::mutate(notModeled = 1)%>%
-  distinct()
-l4 <- as.data.frame(df2$speciesSuccessfullyModeled[!is.na(df2$speciesSuccessfullyModeled)]) %>%
-  dplyr::mutate(ModeledSuccessfully = 1) %>%
-  distinct()
+# interestingly no real issue with Elymus lanceolatus subsp. lanceolatus, Helianthus praecox subsp. praecox, 
+# , Ipomoea violacea
 
+# compile a list of all fcs data for troublesome species 
+fcs <- list.files(path = base_dir,pattern = "summary.csv", full.names = TRUE,  recursive = TRUE)
+# function for flitering list based on character values
+include <- function (theList, toMatch){
+  matches <- unique (grep(paste(toMatch,collapse="|"),
+                          theList, value=TRUE))
+  return(matches)
+}
 
-t2 <- dplyr::left_join(x = t1, y = l2, by = c("unique(x1$name)" = "df2$lowOccurrenceSpecies[!is.na(df2$lowOccurrenceSpecies)]"))
-t2 <- dplyr::left_join(x = t2, y = l3, by = c("unique(x1$name)" = "df2$speciesNotModeled[!is.na(df2$speciesNotModeled)]"))
-t2 <- dplyr::left_join(x = t2, y = l4, by = c("unique(x1$name)" = "df2$speciesSuccessfullyModeled[!is.na(df2$speciesSuccessfullyModeled)]"))
-
-write.csv(x = t2, file = paste0(gap_dir, "/summaryDocs/modelErrorsSummary", Sys.Date(),".csv"))
-
-
-## base directory is getting redefined to gap_dir somewhere. 
-
-# this is a big process it will take time... 
-try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfRun.rmd"),  # file 2
-                      output_file =  paste("SummaryReport_", run_version , Sys.Date(), ".html", sep=''),
-                      output_dir = paste0(base_dir,"/runSummaries")))
-
-
-#### troubleshooting content, most species list 
-#rerunning intraspecific species due to occurrence compiled from species level 
-# spList <- c("Leymus salina subsp. salina","Leymus salina subsp. salmonis", "Persea palustris",
-#              "Vaccinium crassifolium subsp. crassifolium", "Elymus glabriflorus var. australis",
-# "Elymus glabriflorus var. glabriflorus","Elymus glaucus subsp. mackenziei","Ipomoea cordatotriloba var. cordatotriloba",
-# "Juglans major var. major","Juglans microcarpa var. microcarpa"," Prunus virginiana var. demissa",
-# "Ribes cereum var. cereum","Rubus ursinus subsp. macropetalus","Rubus ursinus subsp. ursinus",
-# "Tripsacum dactyloides var. dactyloides")
-
-# # species for issues 3, delete current folders and rerun completely 
-# # test with Vanilla mexicana before deleting any more runs 
-# spList <- c("Vanilla mexicana","Acer saccharum subsp. ozarkense","Rubus abactus","Rubus ostryifolius",
-#             "Fragaria x ananassa","Artocarpus altilis","Lactuca ludoviciana","Psidium guajava")
-
-# Species for issue 4, try re running the models... watch how they fail. It could be there are just
-# not enough points
-# spList <- c("Allium bigelovii","Leymus salina subsp. mojavensis","Rubus kennedyanus","Vaccinium crassifolium subsp. crassifolium",
-#             "Fragaria chiloensis subsp. sandwicensis","Juglans jamaicensis","Helianthus verticillatus",
-#             "Ipomoea littoralis","Rubus x neglectus","Helianthus praecox subsp. praecox","Manihot walkerae","Rubus arundelanus","Allium gooddingii",
-#             "Rubus orarius","Solanum nelsonii","Vitis aestivalis var. linsecomii","Elymus stebbinsii subsp. stebbinsii","Rubus neglectus","Elymus glabriflorus var. australis","Helianthus arizonensis",
-#             "Vitis x novae-angliae","Elymus interruptus","Ipomoea dumetorum","Helianthus debilis subsp. tardiflorus","Elymus glabriflorus var. glabriflorus","Xanthosoma sagittifolium",
-#             "Juglans cinerea","Prunus andersonii","Ribes quercetorum","Gossypium hirsutum"
-# )
-
-
-
+fcs <- include(theList = fcs, toMatch = spList)
+fcs <-fcs[grepl(pattern = "insitu",x = fcs)]
+fcs <- fcs[grepl(pattern = "test20200203", x = fcs)]
+fcs
+for(i in 1:length(fcs)){
+  if(i == 1){
+    all <- read.csv(fcs[i])
+  }else{
+    all <- rbind(all, read.csv(fcs[i]))
+  }
+}
+write.csv(x = all, file = "F:/nrelD/cwrNA/troubleshooting/srsInsituWDPAreruns20200813.csv")

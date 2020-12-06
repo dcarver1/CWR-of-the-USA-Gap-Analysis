@@ -42,7 +42,7 @@ sum_all = function(rasters, extent){
 
 ```
 
-```{r}
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
 # prep data to remove taxon with intraspecific species from this method. 
 rmSpec <- c("Phaseolus acutifolius","Phaseolus leptostachyus","Elymus elymoides","Leymus mollis","Phaseolus maculatus","Hordeum jubatum","Helianthus petiolaris","Ribes sanguineum","Phaseolus polystachios","Prunus serotina","Elymus trachycaulus","Hordeum brachyantherum","Ribes roezlii","Rubus hispidus","Ribes hudsonianum","Helianthus nuttallii","Helianthus pauciflorus","Humulus lupulus","Allium geyeri","Ribes oxyacanthoides","Fragaria x ananassa","Helianthus occidentalis","Fragaria virginiana","Elymus lanceolatus","Fragaria vesca","Helianthus niveus","Helianthus praecox","Prunus fasciculata","Ribes malvaceum","Rubus arcticus","Vitis rotundifolia","Fragaria chiloensis","Ribes aureum","Acer saccharum","Allium victorialis","Elymus stebbinsii","Helianthus debilis","Ipomoea ternifolia","Lactuca tatarica","Prunus ilicifolia","Prunus pumila","Ribes californicum","Rubus idaeus","Saccharum brevibarbe","Vitis aestivalis","Vitis cinerea","Zizania aquatica","Zizania palustris", "Allium schoenoprasum","Elymus glabriflorus",
 "Elymus glaucus","Ipomoea cordatotriloba","Juglans major","Juglans microcarpa","Leymus salina","Prunus virginiana","Ribes cereum","Rubus ursinus","Tripsacum dactyloides","Vaccinium crassifolium","Vaccinium erythrocarpum","Vaccinium ovalifolium"
@@ -89,284 +89,284 @@ try(raster::writeRaster(x = r_sum, filename = paste0(baseDir, "/richnessMap_",Sy
 <br>
 
 
-## Summary of Conservation Statistics for all Species
+<!-- ## Summary of Conservation Statistics for all Species -->
 
-The SRS conservation statistic is based on all known occurance records for the species (Total_records). The other conservation metrics are based on the expert evaluated dataset that was used in the modeling process (Records_Used_in_Model).   
+<!-- The SRS conservation statistic is based on all known occurance records for the species (Total_records). The other conservation metrics are based on the expert evaluated dataset that was used in the modeling process (Records_Used_in_Model).    -->
 
 
-```{r  echo=FALSE, message=FALSE, warning=FALSE}
-# prep data to remove taxon with intraspecific species from this method. 
-rmSpec <- c("Phaseolus acutifolius","Phaseolus leptostachyus","Elymus elymoides","Leymus mollis","Phaseolus maculatus","Hordeum jubatum","Helianthus petiolaris","Ribes sanguineum","Phaseolus polystachios","Prunus serotina","Elymus trachycaulus","Hordeum brachyantherum","Ribes roezlii","Rubus hispidus","Ribes hudsonianum","Helianthus nuttallii","Helianthus pauciflorus","Humulus lupulus","Allium geyeri","Ribes oxyacanthoides","Fragaria x ananassa","Helianthus occidentalis","Fragaria virginiana","Elymus lanceolatus","Fragaria vesca","Helianthus niveus","Helianthus praecox","Prunus fasciculata","Ribes malvaceum","Rubus arcticus","Vitis rotundifolia","Fragaria chiloensis","Ribes aureum","Acer saccharum","Allium victorialis","Elymus stebbinsii","Helianthus debilis","Ipomoea ternifolia","Lactuca tatarica","Prunus ilicifolia","Prunus pumila","Ribes californicum","Rubus idaeus","Saccharum brevibarbe","Vitis aestivalis","Vitis cinerea","Zizania aquatica","Zizania palustris"
-)
+<!-- ```{r  echo=FALSE, message=FALSE, warning=FALSE} -->
+<!-- # prep data to remove taxon with intraspecific species from this method.  -->
+<!-- rmSpec <- c("Phaseolus acutifolius","Phaseolus leptostachyus","Elymus elymoides","Leymus mollis","Phaseolus maculatus","Hordeum jubatum","Helianthus petiolaris","Ribes sanguineum","Phaseolus polystachios","Prunus serotina","Elymus trachycaulus","Hordeum brachyantherum","Ribes roezlii","Rubus hispidus","Ribes hudsonianum","Helianthus nuttallii","Helianthus pauciflorus","Humulus lupulus","Allium geyeri","Ribes oxyacanthoides","Fragaria x ananassa","Helianthus occidentalis","Fragaria virginiana","Elymus lanceolatus","Fragaria vesca","Helianthus niveus","Helianthus praecox","Prunus fasciculata","Ribes malvaceum","Rubus arcticus","Vitis rotundifolia","Fragaria chiloensis","Ribes aureum","Acer saccharum","Allium victorialis","Elymus stebbinsii","Helianthus debilis","Ipomoea ternifolia","Lactuca tatarica","Prunus ilicifolia","Prunus pumila","Ribes californicum","Rubus idaeus","Saccharum brevibarbe","Vitis aestivalis","Vitis cinerea","Zizania aquatica","Zizania palustris" -->
+<!-- ) -->
 
 
-modelingData <-occData
+<!-- modelingData <-occData -->
 
-modelingData <- modelingData[!modelingData$taxon %in% rmSpec,]
+<!-- modelingData <- modelingData[!modelingData$taxon %in% rmSpec,] -->
 
-speciesList <- speciesList[!speciesList %in% rmSpec ]
+<!-- speciesList <- speciesList[!speciesList %in% rmSpec ] -->
 
-```
+<!-- ``` -->
 
-```{r  echo=FALSE, message=FALSE, warning=FALSE}
-species_summary <- function(species){
+<!-- ```{r  echo=FALSE, message=FALSE, warning=FALSE} -->
+<!-- species_summary <- function(species){ -->
 
-  count_dir <- paste0(baseDir,"/",species,"/",run_version)
-  gapDir <- paste0(baseDir,"/",species,"/",run_version, "/gap_analysis")
+<!--   count_dir <- paste0(baseDir,"/",species,"/",run_version) -->
+<!--   gapDir <- paste0(baseDir,"/",species,"/",run_version, "/gap_analysis") -->
 
-  numberUsedInModel <- modelingData %>%
-    filter(taxon == species)%>%
-    nrow()
+<!--   numberUsedInModel <- modelingData %>% -->
+<!--     filter(taxon == species)%>% -->
+<!--     nrow() -->
 
-  colsNames <- c( "Scientific_Name", "Total_records",
-                  "Total_with_coords", "Total_G", "Total_G_with_coords", "Total_H", "Total_H_with_coords",
-                  "SRS_ex", "GRS_ex", "ERS_ex", "FCS_ex", "SRS_in", "GRS_in", "ERS_in", "FCS_in", "FCSc_min",
-                  "FCSc_max", "FCSc_mean", "Priority_category")
+<!--   colsNames <- c( "Scientific_Name", "Total_records", -->
+<!--                   "Total_with_coords", "Total_G", "Total_G_with_coords", "Total_H", "Total_H_with_coords", -->
+<!--                   "SRS_ex", "GRS_ex", "ERS_ex", "FCS_ex", "SRS_in", "GRS_in", "ERS_in", "FCS_in", "FCSc_min", -->
+<!--                   "FCSc_max", "FCSc_mean", "Priority_category") -->
 
-  summ_table <- as.data.frame(matrix(ncol = length(colsNames), nrow = 1))
-  colnames(summ_table) <- colsNames
+<!--   summ_table <- as.data.frame(matrix(ncol = length(colsNames), nrow = 1)) -->
+<!--   colnames(summ_table) <- colsNames -->
 
-  summ_table$Scientific_Name <- as.character(species)
+<!--   summ_table$Scientific_Name <- as.character(species) -->
 
-  if(file.exists(paste0(count_dir, "/counts.csv"))){
-    counts <- read.csv(paste0(count_dir, "/counts.csv"), header = TRUE)
-    summ_table$Total_records <- counts$totalRecords
-    summ_table$Total_with_coords <- counts$totalUseful
-    summ_table$Total_G <- counts$totalGRecords
-    summ_table$Total_G_with_coords <- counts$totalGUseful
-    summ_table$Total_H <- counts$totalHRecords
-    summ_table$Total_H_with_coords <- counts$totalHUseful
-    #summ_table$Records_Used_in_Model <- numberUsedInModel
-  }else{
-    summ_table$Total_records <- NA
-    summ_table$Total_with_coords <- NA
-    summ_table$Total_G <- NA
-    summ_table$Total_G_with_coords <- NA
-    summ_table$Total_H <- NA
-    summ_table$Total_H_with_coords <- NA
-    #summ_table$Records_Used_in_Model <- NA
-  }
+<!--   if(file.exists(paste0(count_dir, "/counts.csv"))){ -->
+<!--     counts <- read.csv(paste0(count_dir, "/counts.csv"), header = TRUE) -->
+<!--     summ_table$Total_records <- counts$totalRecords -->
+<!--     summ_table$Total_with_coords <- counts$totalUseful -->
+<!--     summ_table$Total_G <- counts$totalGRecords -->
+<!--     summ_table$Total_G_with_coords <- counts$totalGUseful -->
+<!--     summ_table$Total_H <- counts$totalHRecords -->
+<!--     summ_table$Total_H_with_coords <- counts$totalHUseful -->
+<!--     #summ_table$Records_Used_in_Model <- numberUsedInModel -->
+<!--   }else{ -->
+<!--     summ_table$Total_records <- NA -->
+<!--     summ_table$Total_with_coords <- NA -->
+<!--     summ_table$Total_G <- NA -->
+<!--     summ_table$Total_G_with_coords <- NA -->
+<!--     summ_table$Total_H <- NA -->
+<!--     summ_table$Total_H_with_coords <- NA -->
+<!--     #summ_table$Records_Used_in_Model <- NA -->
+<!--   } -->
 
-  if(file.exists(paste0(gapDir,"/exsitu/summary.csv"))){
-    exsitu <- read.csv(paste0(gapDir,"/exsitu/summary.csv"), header = TRUE)
-    summ_table$SRS_ex <- round(exsitu$SRS, 2)
-    summ_table$GRS_ex <- round(exsitu$GRS, 2)
-    summ_table$ERS_ex <- round(exsitu$ERS, 2)
-    summ_table$FCS_ex <- round(exsitu$FCS, 2)
-  }
+<!--   if(file.exists(paste0(gapDir,"/exsitu/summary.csv"))){ -->
+<!--     exsitu <- read.csv(paste0(gapDir,"/exsitu/summary.csv"), header = TRUE) -->
+<!--     summ_table$SRS_ex <- round(exsitu$SRS, 2) -->
+<!--     summ_table$GRS_ex <- round(exsitu$GRS, 2) -->
+<!--     summ_table$ERS_ex <- round(exsitu$ERS, 2) -->
+<!--     summ_table$FCS_ex <- round(exsitu$FCS, 2) -->
+<!--   } -->
 
-  if(file.exists(paste0(gapDir,"/insitu/summary.csv"))){
-    insitu <- read.csv(paste0(gapDir,"/insitu/summary.csv"), header = TRUE)
-    summ_table$SRS_in <- round(insitu$SRS.SRS, 2)
-    summ_table$GRS_in <- round(insitu$GRS, 2)
-    summ_table$ERS_in <- round(insitu$ERS, 2)
-    summ_table$FCS_in <- round(insitu$FCS, 2)
-  }
+<!--   if(file.exists(paste0(gapDir,"/insitu/summary.csv"))){ -->
+<!--     insitu <- read.csv(paste0(gapDir,"/insitu/summary.csv"), header = TRUE) -->
+<!--     summ_table$SRS_in <- round(insitu$SRS.SRS, 2) -->
+<!--     summ_table$GRS_in <- round(insitu$GRS, 2) -->
+<!--     summ_table$ERS_in <- round(insitu$ERS, 2) -->
+<!--     summ_table$FCS_in <- round(insitu$FCS, 2) -->
+<!--   } -->
 
 
 
-  if(file.exists(paste0(gapDir,"/combined/fcs_combined.csv"))){
-    combined <- read.csv(paste0(gapDir,"/combined/fcs_combined.csv"), header = TRUE)
-    summ_table$FCSc_min <- round(combined$FCSc_min, 2)
-    summ_table$FCSc_max <- round(combined$FCSc_max, 2)
-    summ_table$FCSc_mean <- round(combined$FCSc_mean, 2)
-    summ_table$Priority_category <- as.character(combined$FCSc_mean_class)
-  }
+<!--   if(file.exists(paste0(gapDir,"/combined/fcs_combined.csv"))){ -->
+<!--     combined <- read.csv(paste0(gapDir,"/combined/fcs_combined.csv"), header = TRUE) -->
+<!--     summ_table$FCSc_min <- round(combined$FCSc_min, 2) -->
+<!--     summ_table$FCSc_max <- round(combined$FCSc_max, 2) -->
+<!--     summ_table$FCSc_mean <- round(combined$FCSc_mean, 2) -->
+<!--     summ_table$Priority_category <- as.character(combined$FCSc_mean_class) -->
+<!--   } -->
 
-  return(summ_table)
+<!--   return(summ_table) -->
 
-  }
+<!--   } -->
 
 
 
-species_table<-lapply(1:length(speciesList), function(i){
-  pt<-species_summary(speciesList[i])
-  return(pt)
+<!-- species_table<-lapply(1:length(speciesList), function(i){ -->
+<!--   pt<-species_summary(speciesList[i]) -->
+<!--   return(pt) -->
 
-  })
+<!--   }) -->
 
-species_table <- do.call(rbind, species_table)
-utils::write.csv(species_table, paste0(baseDir, "/species_summary_",run_version ,".csv"), row.names = FALSE, quote = FALSE)
-DT::datatable(species_table, options = list(pageLength = 25))
+<!-- species_table <- do.call(rbind, species_table) -->
+<!-- utils::write.csv(species_table, paste0(baseDir, "/species_summary_",run_version ,".csv"), row.names = FALSE, quote = FALSE) -->
+<!-- DT::datatable(species_table, options = list(pageLength = 25)) -->
 
-```
-
-
-
-<br>
-<br>
-<br>
-
-
-## Median Model Runs
-Evaluation statistics for the median model run for species that enough occurence points to be modeled.
-
-```{r  echo=FALSE, message=FALSE, warning=FALSE}
-n= 1
-vector <- c()
-### need to put is a clause incase
-for(i in speciesList){
-  csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
-  thres <- include(csv, "eval_metrics.csv")
-  if(length(thres) > 0){
-    vector[n] <- thres
-    n = n+1
-  }
-}
-df <- lapply(vector, read.csv)%>%
-  bind_rows
-
-
-eval <- df %>%
-    dplyr::select("species" , "AUCtest","STAUC","ASD15" , "VALID")
-colnames(eval) <- c("Species" , "AUC", "SDAUC","ASD15","Valid")
-
-
-modelingMetrics <- df %>%
-  dplyr::select("species", "sensi_train","speci_train","threshold_train","max.TSS_train","minROCdist_train", "threshold_test","sensi_test","speci_test", "matthews.cor_test", "LR_pos_test" , "LR_neg_test","kappa_index_test" )
-
-  colnames(modelingMetrics) <- c("Species" , "Sensitivity Train","Specificity Train","Threshold Train", "Maximun TSS Train","Minimun ROC Distance Train", "Threshold Test","Sensitivity Test"       
-, "Specificity Test","Matthews Correlation Test", "LR_pos_test"      
-, "LR_neg_test","kappa_index_test" )
-
-df1 <- dplyr::bind_cols(eval, modelingMetrics[,-1])
-  write.csv(df1, paste0(baseDir, "/median_summary_",run_version,".csv"), row.names = FALSE, quote = FALSE)
-DT::datatable(eval, options = list(pageLength = 25))
-
-```
-
-
-Detailed median model statistics for species that enough occurence points to be modeled.
-
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-
-DT::datatable(modelingMetrics)
-```
-
-
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-## Gather raw Occurence data for Genus
-
-n= 1
-vector <- c()
-### need to put is a clause incase
-for(i in speciesList){
-  csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
-  thres <- include(csv, "rawDataForNA.csv")
-  if(length(thres) > 0){
-    vector[n] <- thres
-    n = n+1
-  }
-}
-df <- lapply(vector, read.csv)%>%
-  bind_rows
-
-write.csv(df, paste0(baseDir, "/summaryDocs/occurenceInNA",run_version ,".csv"), row.names = FALSE, quote = FALSE)
-```
-<br>
-<br>
-<br>
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-### create a dataframe that should the species that have not been model, have low occurence, or did not produde
-### summary html
-lowOccurence <- unique(lowOccurence)
-notModeled <- unique(notModeled)
-fullModelProcess <- unique(fullModelProcess)
-
-# test modeled species against species list to determine those that did not produce summary htmls
-noSummary<- speciesList[!speciesList %in% fullModelProcess]
-
-
-maxRow <- max(c(length(lowOccurence), length(notModeled), length(noSummary)))
-if(maxRow >0){
-
-## make all vectors the same length
-lowOccurence <- c(lowOccurence, rep(NA, maxRow-length(lowOccurence)))
-notModeled <- c(notModeled, rep(NA, maxRow-length(notModeled)))
-noSummary <- c(noSummary, rep(NA, maxRow-length(noSummary)))
-
-r1 <- data.frame(matrix(nrow = maxRow, ncol = 3))
-if(length(lowOccurence) > 0){
-  r1$X1 <- as.character(lowOccurence)
-}
-if(!is.na(notModeled)){
-  r1$X2 <- as.character(notModeled)
-}
-if(!is.na(noSummary)){
-  r1$X3 <- as.character(noSummary)
-}
-colnames(r1) <- c("Species with less then 3 Occurences and could not be model", "Species that we unable to be modeled", "Species that did not produce a summary html")
-write.csv(x = r1, file =paste0(baseDir, "/speciesThatDidNotModel_",run_version ,".csv"))
-DT::datatable(r1)
-}else{
-  print("All species from this genus were successfully modeled")
-}
-
-```
-
-```{r  echo=FALSE, message=FALSE, warning=FALSE}
-# compile all the redlist data
-n= 1
-vector <- c()
-  ### need to put is a clause incase
-for(i in speciesList){
-csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
-redValues <- include(csv, "listingValues.csv")
-if(length(redValues) > 0){
-vector[n] <- redValues
-n = n+1
-}
-}
-
-df <- lapply(vector, read.csv)%>%
-  bind_rows
-
-write.csv(df, paste0(baseDir, "/redlistValues_",run_version ,".csv"), row.names = FALSE)
-
-DT::datatable(df)
-```
-
-
-```{r  echo=FALSE, message=FALSE, warning=FALSE}
-# compile all the modeled Bio Data
-n= 1
-vector <- c()
-  ### need to put is a clause incase
-for(i in speciesList){
-csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
-bioValues <- include(csv, "bioValuesForPresencePoints.csv")
-if(length(bioValues) > 0){
-vector[n] <- bioValues
-n = n+1
-}
-}
-
-df <- lapply(vector, read.csv)%>%
-  bind_rows
-
-write.csv(df, paste0(baseDir, "/modeledBioValues_",run_version ,".csv"), row.names = FALSE)
-```
-
-```{r  echo=FALSE, message=FALSE, warning=FALSE}
-# compile all the variable selection options
-n= 1
-vector <- c()
-  ### need to put is a clause incase
-for(i in speciesList){
-csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE)
-selectVar <- include(csv, "predictorImportance.csv")
-if(length(selectVar) > 0){
-vector[n] <- selectVar
-n = n+1
-}
-}
-
-df <- lapply(vector, read.csv)%>%
-  bind_rows
-write.csv(df, paste0(baseDir, "/variablesModeled_",run_version ,".csv"), row.names = FALSE)
-```
-
-
-This document was last last updated on `r Sys.Date()`
+<!-- ``` -->
+
+
+
+<!-- <br> -->
+<!-- <br> -->
+<!-- <br> -->
+
+
+<!-- ## Median Model Runs -->
+<!-- Evaluation statistics for the median model run for species that enough occurence points to be modeled. -->
+
+<!-- ```{r  echo=FALSE, message=FALSE, warning=FALSE} -->
+<!-- n= 1 -->
+<!-- vector <- c() -->
+<!-- ### need to put is a clause incase -->
+<!-- for(i in speciesList){ -->
+<!--   csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE) -->
+<!--   thres <- include(csv, "eval_metrics.csv") -->
+<!--   if(length(thres) > 0){ -->
+<!--     vector[n] <- thres -->
+<!--     n = n+1 -->
+<!--   } -->
+<!-- } -->
+<!-- df <- lapply(vector, read.csv)%>% -->
+<!--   bind_rows -->
+
+
+<!-- eval <- df %>% -->
+<!--     dplyr::select("species" , "AUCtest","STAUC","ASD15" , "VALID") -->
+<!-- colnames(eval) <- c("Species" , "AUC", "SDAUC","ASD15","Valid") -->
+
+
+<!-- modelingMetrics <- df %>% -->
+<!--   dplyr::select("species", "sensi_train","speci_train","threshold_train","max.TSS_train","minROCdist_train", "threshold_test","sensi_test","speci_test", "matthews.cor_test", "LR_pos_test" , "LR_neg_test","kappa_index_test" ) -->
+
+<!--   colnames(modelingMetrics) <- c("Species" , "Sensitivity Train","Specificity Train","Threshold Train", "Maximun TSS Train","Minimun ROC Distance Train", "Threshold Test","Sensitivity Test"        -->
+<!-- , "Specificity Test","Matthews Correlation Test", "LR_pos_test"       -->
+<!-- , "LR_neg_test","kappa_index_test" ) -->
+
+<!-- df1 <- dplyr::bind_cols(eval, modelingMetrics[,-1]) -->
+<!--   write.csv(df1, paste0(baseDir, "/median_summary_",run_version,".csv"), row.names = FALSE, quote = FALSE) -->
+<!-- DT::datatable(eval, options = list(pageLength = 25)) -->
+
+<!-- ``` -->
+
+
+<!-- Detailed median model statistics for species that enough occurence points to be modeled. -->
+
+
+<!-- ```{r echo=FALSE, message=FALSE, warning=FALSE} -->
+
+<!-- DT::datatable(modelingMetrics) -->
+<!-- ``` -->
+
+
+
+<!-- ```{r echo=FALSE, message=FALSE, warning=FALSE} -->
+<!-- ## Gather raw Occurence data for Genus -->
+
+<!-- n= 1 -->
+<!-- vector <- c() -->
+<!-- ### need to put is a clause incase -->
+<!-- for(i in speciesList){ -->
+<!--   csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE) -->
+<!--   thres <- include(csv, "rawDataForNA.csv") -->
+<!--   if(length(thres) > 0){ -->
+<!--     vector[n] <- thres -->
+<!--     n = n+1 -->
+<!--   } -->
+<!-- } -->
+<!-- df <- lapply(vector, read.csv)%>% -->
+<!--   bind_rows -->
+
+<!-- write.csv(df, paste0(baseDir, "/summaryDocs/occurenceInNA",run_version ,".csv"), row.names = FALSE, quote = FALSE) -->
+<!-- ``` -->
+<!-- <br> -->
+<!-- <br> -->
+<!-- <br> -->
+<!-- <!-- # ```{r echo=FALSE, message=FALSE, warning=FALSE} --> -->
+<!-- <!-- # ### create a dataframe that should the species that have not been model, have low occurence, or did not produde --> -->
+<!-- <!-- # ### summary html --> -->
+<!-- <!-- # lowOccurence <- unique(lowOccurence) --> -->
+<!-- <!-- # notModeled <- unique(notModeled) --> -->
+<!-- <!-- # fullModelProcess <- unique(fullModelProcess) --> -->
+<!-- <!-- #  --> -->
+<!-- <!-- # # test modeled species against species list to determine those that did not produce summary htmls --> -->
+<!-- <!-- # noSummary<- speciesList[!speciesList %in% fullModelProcess] --> -->
+<!-- <!-- #  --> -->
+<!-- <!-- #  --> -->
+<!-- <!-- # maxRow <- max(c(length(lowOccurence), length(notModeled), length(noSummary))) --> -->
+<!-- <!-- # if(maxRow >0){ --> -->
+<!-- <!-- #  --> -->
+<!-- <!-- # ## make all vectors the same length --> -->
+<!-- <!-- # lowOccurence <- c(lowOccurence, rep(NA, maxRow-length(lowOccurence))) --> -->
+<!-- <!-- # notModeled <- c(notModeled, rep(NA, maxRow-length(notModeled))) --> -->
+<!-- <!-- # noSummary <- c(noSummary, rep(NA, maxRow-length(noSummary))) --> -->
+<!-- <!-- #  --> -->
+<!-- <!-- # r1 <- data.frame(matrix(nrow = maxRow, ncol = 3)) --> -->
+<!-- <!-- # if(length(lowOccurence) > 0){ --> -->
+<!-- <!-- #   r1$X1 <- as.character(lowOccurence) --> -->
+<!-- <!-- # } --> -->
+<!-- <!-- # if(!is.na(notModeled)){ --> -->
+<!-- <!-- #   r1$X2 <- as.character(notModeled) --> -->
+<!-- <!-- # } --> -->
+<!-- <!-- # if(!is.na(noSummary)){ --> -->
+<!-- <!-- #   r1$X3 <- as.character(noSummary) --> -->
+<!-- <!-- # } --> -->
+<!-- <!-- # colnames(r1) <- c("Species with less then 3 Occurences and could not be model", "Species that we unable to be modeled", "Species that did not produce a summary html") --> -->
+<!-- <!-- # write.csv(x = r1, file =paste0(baseDir, "/speciesThatDidNotModel_",run_version ,".csv")) --> -->
+<!-- <!-- # DT::datatable(r1) --> -->
+<!-- <!-- # }else{ --> -->
+<!-- <!-- #   print("All species from this genus were successfully modeled") --> -->
+<!-- <!-- # } --> -->
+
+<!-- ``` -->
+
+<!-- ```{r  echo=FALSE, message=FALSE, warning=FALSE} -->
+<!-- # compile all the redlist data -->
+<!-- n= 1 -->
+<!-- vector <- c() -->
+<!--   ### need to put is a clause incase -->
+<!-- for(i in speciesList){ -->
+<!-- csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE) -->
+<!-- redValues <- include(csv, "listingValues4kmClean.csv") -->
+<!-- if(length(redValues) > 0){ -->
+<!-- vector[n] <- redValues -->
+<!-- n = n+1 -->
+<!-- } -->
+<!-- } -->
+
+<!-- df <- lapply(vector, read.csv)%>% -->
+<!--   bind_rows -->
+
+<!-- write.csv(df, paste0(baseDir, "/redlistValues_",run_version ,".csv"), row.names = FALSE) -->
+
+<!-- DT::datatable(df) -->
+<!-- ``` -->
+
+
+<!-- ```{r  echo=FALSE, message=FALSE, warning=FALSE} -->
+<!-- # compile all the modeled Bio Data -->
+<!-- n= 1 -->
+<!-- vector <- c() -->
+<!--   ### need to put is a clause incase -->
+<!-- for(i in speciesList){ -->
+<!-- csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE) -->
+<!-- bioValues <- include(csv, "bioValuesForPresencePoints.csv") -->
+<!-- if(length(bioValues) > 0){ -->
+<!-- vector[n] <- bioValues -->
+<!-- n = n+1 -->
+<!-- } -->
+<!-- } -->
+
+<!-- df <- lapply(vector, read.csv)%>% -->
+<!--   bind_rows -->
+
+<!-- write.csv(df, paste0(baseDir, "/modeledBioValues_",run_version ,".csv"), row.names = FALSE) -->
+<!-- ``` -->
+
+<!-- ```{r  echo=FALSE, message=FALSE, warning=FALSE} -->
+<!-- # compile all the variable selection options -->
+<!-- n= 1 -->
+<!-- vector <- c() -->
+<!--   ### need to put is a clause incase -->
+<!-- for(i in speciesList){ -->
+<!-- csv <- list.files(path = paste0(baseDir,"/",i,"/",run_version,"/"), pattern = '.csv', recursive = TRUE, full.names = TRUE) -->
+<!-- selectVar <- include(csv, "predictorImportance.csv") -->
+<!-- if(length(selectVar) > 0){ -->
+<!-- vector[n] <- selectVar -->
+<!-- n = n+1 -->
+<!-- } -->
+<!-- } -->
+
+<!-- df <- lapply(vector, read.csv)%>% -->
+<!--   bind_rows -->
+<!-- write.csv(df, paste0(baseDir, "/variablesModeled_",run_version ,".csv"), row.names = FALSE) -->
+<!-- ``` -->
+
+
+<!-- This document was last last updated on `r Sys.Date()` -->

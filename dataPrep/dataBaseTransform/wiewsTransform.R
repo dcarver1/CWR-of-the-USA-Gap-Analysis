@@ -8,7 +8,7 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrNA/occurrence_data2019_05_29/WIEWS"
+base_dir <- "F:/nrelD/cwrNA/occurrence_data2019_05_29/WIEWS"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/COLIN_GENUS.csv")

@@ -1,22 +1,24 @@
-D:/cwrNA/src/dataPrep/addNorthAmericaPointsoCounts.R 
+D:/cwrNA/src/dataPrep/addNorthAmericanCounts.r 
 
 ###
-# add the number of points that occur in modeling area to counts CSV and rewrite 
-# 
-#
+# add the number of points that occur in modeling area to counts CSV and rewrite
+# dan.carver@carverd.com
+# 20200414
 ###
-
 
 addNorthAmericanCounts <- function(species){
+      # read in data filtered to north america
       df1 <- spPoint@data %>%
         dplyr::group_by(type) %>%
         dplyr::summarise(count = n())
+      # if both g and h occurrences are present
       if(nrow(df1) == 2){
         gs <- df1 %>% filter(type=="G")
         gs <- gs$count[1]
         hs <- df1 %>% filter(type=="H")
         hs <- hs$count[1]
       }else{
+        # if only one or the other occurrences types area present
         if(df1$type == "G"){
           gs <- df1 %>% filter(type=="G")
           gs <- gs$count[1]
@@ -27,21 +29,21 @@ addNorthAmericanCounts <- function(species){
           hs <- hs$count[1]
         }
       }
-      
-      df <- read.csv(paste0(sp_dir,"/counts.csv")) 
-      
+      # read in existing counts data
+      df <- read.csv(paste0(sp_dir,"/counts.csv"))
+      # assign values
       df$NA_occurrences <- nrow(spPoint)
       df$NA_GUseful <- gs
       df$NA_HUseful <- hs
+  # write out content.
   write.csv(x = df, file = paste0(sp_dir,"/counts.csv"), row.names = FALSE)
-  dfCounts <<- rbind(dfCounts, df)
-  print("done")
 }
-
 D:/cwrNA/src/dataPrep/countryCheck.R 
 
 ###
-# subset all point locations that do not fall within a country 
+# subset all point locations that do not fall within a country of interest
+# and generate the first version of clean data which is used in the modeling
+# process
 # 20190827
 # carver.dan1@gmail.com
 ###
@@ -50,121 +52,75 @@ countryCheck <- function(species){
   ###
   # need to join between spatial points and spatial polygon dataframe to get country information
   #https://www.rdocumentation.org/packages/sp/versions/1.3-1/topics/over-methods
-  
-  # create spatial point object and set CRS 
-  # set crs to the same 
+
+  # create spatial point object and set CRS
+  # set crs to the same
   xyData <<- sp::SpatialPoints(spPoint@coords)
   crs(xyData) <- crs(countrySHP)
 
-  # test to see which feautres fall within a country 
+  # overlay with country shp
   countryVal <- data.frame(over(x = xyData, y = countrySHP)) %>%
     dplyr::select(ISO_A3)
-  
-  
-  
+
   # add data back to spPoints and drop all columns that have no ISO3
   spPoint@data$iso3_check <- countryVal$ISO_A3
   onLand<- complete.cases(spPoint@data$iso3_check) #https://stackoverflow.com/questions/21567028/extracting-points-with-polygon-in-r
   spPoint <- spPoint[onLand,]
 
-  # pull in states by taxon data and filter it to genus, species 
+  # pull in states by taxon data and filter it to genus, species
   sData <- statesData %>%
-    dplyr::filter(name == "two")%>%
+    dplyr::filter(name == species)%>%
     dplyr::distinct(State) %>%
     dplyr::filter(State != "")
+  # clause for species with no state specific data in GRIN
   if(nrow(sData) == 0){
     cleanPoints <<- spPoint
   }else{
-      #seperate out points that fall inside Mex, Can, and Usa 
+      #seperate out points that fall inside Mex, Can, and Usa
       spPoint$StateTest <- spPoint@data$iso3_check %in% c("MEX", "USA", "CAN")
-      
+      # we only test states for mex,usa,can. So two groups are generated here.
       mucPoints <- spPoint[spPoint$StateTest == TRUE,]
       nonMucPoints <- spPoint[spPoint$StateTest == FALSE,]
-      
-      # filter the sp admin 
+
+      # filter the sp admin
       if(nrow(mucPoints) > 0){
+        # States SP Object is a large spatial polygon feature loaded in run lineal
         sSp <- statesSpObject[statesSpObject$NAME_1 %in% sData$State,]
-        
         #overlay points onto filter states data and remove any points that do not fall within know states
-        statePoints <- as.data.frame(over(x = mucPoints, y = sSp))%>%
-          dplyr::select(NAME_1)
-        
-        
-        t1 <-nrow(statePoints)
-        # add data back to spPoints and drop all columns that have no ISO3
-        mucPoints <- mucPoints[!is.na(statePoints$NAME_1),]
-        t2 <- nrow(mucPoints)
-      }
-      if(t2 != 0){
-        spPoint <- rbind(mucPoints,nonMucPoints )  
-        
-        # filter Duplicates 
-        uniqueP <- distinct(spPoint@data)
-        coords <- cbind(uniqueP$longitude, uniqueP$latitude)
-        
-        cleanPoints <<- sp::SpatialPointsDataFrame(coords = coords, data = uniqueP, proj4string = crs(spPoint))
-        
-        # Might want to include a step that limits the points to us, canada, and mexico but I need
-        # to check in with Colin about that First 
+          statePoints <- as.data.frame(over(x = mucPoints, y = sSp))%>%
+            dplyr::select(NAME_1)
+
+          # add data back to spPoints and drop all columns that have no ISO3
+          mucPoints <- mucPoints[!is.na(statePoints$NAME_1),]
+          t2 <- nrow(mucPoints)
+        #clause for when states were found to contain occurrences
+        if(t2 != 0){
+          spPoint <- rbind(mucPoints,nonMucPoints )
+          # filter Duplicates
+          uniqueP <- distinct(spPoint@data)
+          coords <- cbind(uniqueP$longitude, uniqueP$latitude)
+          # base data used in the modeling process.
+          cleanPoints <<- sp::SpatialPointsDataFrame(coords = coords, data = uniqueP, proj4string = crs(spPoint))
+
+        }else{
+          # if no occurrence data is found within the selected states this
+          # this process defaults back to include all data.
+          cleanPoints <<- spPoint
+        }
       }else{
-        cleanPoints <<- "there are no points present withn the states of interest"
-      }
+        # if no occurrence are found in can,usa,mex the all points are kept 
+      spPoint <- nonMucPoints
+      cleanPoints <<- spPoint
+    }
   }
-}
-
-D:/cwrNA/src/dataPrep/counts1.R 
-
-####
-
-# 10/15/2018
-
-# The goal of this work is to generate a tab seperated files that contains counts of multiple paraments as
-
-# defined by the aichi docs
-
-
-counts1 <- function(species){
-    dataThin <<- rawData %>%
-      dplyr::select(c("taxon", "latitude", "longitude", "type","databaseSource")) %>%
-      mutate(hasLat = !is.na(latitude) & latitude != "\\N" & latitude != "" & !is.null(latitude) & latitude != "NULL") %>%
-      mutate(hasLong = !is.na(longitude) & longitude != "\\N"& longitude != "" & !is.null(longitude)& longitude != "NULL") %>%
-      mutate(hasLatLong = hasLat & hasLong)
-
-
-    colNames <- c("species","totalRecords",	"hasLat", "hasLong","totalUseful", 	"totalGRecords",
-                  "totalGUseful","totalHRecords",	"totalHUseful","numberOfUniqueSources", 
-                  "NA_occurrences","NA_GUseful" ,"NA_HUseful")
-    # this was removing all reconds with no lat long, make the total number and the total number of useful elements equal
-    #noNas <- dataThin[complete.cases(dataThin),]
-    tbl <- dataThin %>%
-      dplyr::group_by(type, hasLatLong ) %>%
-      dplyr::summarize(total = n())
-
-    countsData <- data.frame(matrix(NA, nrow = 1, ncol = 13))
-    colnames(countsData) <- colNames
-    
-    #colnames(countsData) <- colNames
-    countsData$species <- unique(dataThin$taxon)
-    countsData$totalRecords <- nrow(dataThin)
-    countsData$totalUseful <- sum((subset(tbl, hasLatLong == TRUE))$total)
-    countsData$totalGRecords <- sum((subset(tbl, type == "G"))$total)
-    countsData$totalGUseful <- sum((subset(tbl, type == "G" & hasLatLong == TRUE))$total)
-    countsData$totalHRecords <- sum((subset(tbl, type == "H"))$total)
-    countsData$totalHUseful <- sum((subset(tbl, type == "H" & hasLatLong == TRUE))$total)
-    countsData$hasLat <- sum(dataThin$hasLat)
-    countsData$hasLong <- sum(dataThin$hasLong)
-    countsData$numberOfUniqueSources <- n_distinct(rawData$databaseSource)
-    countsData$NA_occurrences <- 0
-    countsData$NA_GUseful <- 0 
-    countsData$NA_HUseful <- 0
-    
-    write.csv(countsData, file = paste0(sp_dir,"/counts.csv"),row.names = FALSE)
 }
 D:/cwrNA/src/dataPrep/create_sp_dirs.R 
 
-# This function runs the entire process for a selected species
-# @param (chr) species: species ID
-# @return (dir): status of directory creation
+###
+# Test for existing file stucture and generates sturcture if needed.
+# dan.carver@carverd.com
+# 20200414
+###
 
 create_sp_dirs <- function(species) {
   #create species dir
@@ -744,7 +700,7 @@ df2 <- rbind(t1, t4)
 df3 <- df2 %>%
   dplyr::mutate(t0 = taxon)%>%
   tidyr::separate(col = t0,into = c("t1","t2", "t3","t4","t5","t6"),
-                       sep = " ")
+                  sep = " ")
 df3$genus <- df3$t1
 df4 <- df3[,18:22]
 # was assigning this to a column in a second dataframe and it was causeing quite a few issues. 
@@ -1897,55 +1853,63 @@ write.csv(x = df4, file = paste0(base_dir,"/refinedWiews.csv"))
 
 
 
+D:/cwrNA/src/dataPrep/developCounts.r 
+
+####
+# Based on the raw data, summarize by type and presence of lat long
+# dan.carver@carverd.com
+# 20200414
+###
+
+developCounts <- function(species){
+    # define presence of usable lat long values
+    dataThin <<- rawData %>%
+      dplyr::select(c("taxon", "latitude", "longitude", "type","databaseSource")) %>%
+      mutate(hasLat = !is.na(latitude) & latitude != "\\N" & latitude != "" & !is.null(latitude) & latitude != "NULL") %>%
+      mutate(hasLong = !is.na(longitude) & longitude != "\\N"& longitude != "" & !is.null(longitude)& longitude != "NULL") %>%
+      mutate(hasLatLong = hasLat & hasLong)
+
+      # set column names for counts df
+    colNames <- c("species","totalRecords",	"hasLat", "hasLong","totalUseful", 	"totalGRecords",
+                  "totalGUseful","totalHRecords",	"totalHUseful","numberOfUniqueSources",
+    # summarize data
+    tbl <- dataThin %>%
+      dplyr::group_by(type, hasLatLong ) %>%
+      dplyr::summarize(total = n())
+    # generate counts df
+    countsData <- data.frame(matrix(NA, nrow = 1, ncol = 13))
+    colnames(countsData) <- colNames
+    #assign values to counts df
+    countsData$species <- unique(dataThin$taxon)
+    countsData$totalRecords <- nrow(dataThin)
+    countsData$totalUseful <- sum((subset(tbl, hasLatLong == TRUE))$total)
+    countsData$totalGRecords <- sum((subset(tbl, type == "G"))$total)
+    countsData$totalGUseful <- sum((subset(tbl, type == "G" & hasLatLong == TRUE))$total)
+    countsData$totalHRecords <- sum((subset(tbl, type == "H"))$total)
+    countsData$totalHUseful <- sum((subset(tbl, type == "H" & hasLatLong == TRUE))$total)
+    countsData$hasLat <- sum(dataThin$hasLat)
+    countsData$hasLong <- sum(dataThin$hasLong)
+    countsData$numberOfUniqueSources <- n_distinct(rawData$databaseSource)
+    # these values are reassigned in 'addNorthAmericanPointstoCounts.r'
+    countsData$NA_occurrences <- 0
+    countsData$NA_GUseful <- 0
+    countsData$NA_HUseful <- 0
+
+    write.csv(countsData, file = paste0(sp_dir,"/counts.csv"),row.names = FALSE)
+}
 D:/cwrNA/src/dataPrep/developRaw.r 
 
 ###
-# script to produce the raw data for each species
+# Produces the raw data for each species
+# dan.carver@carved.com
+# 20200414
 ###
 
-#troubleshooting
-#species <- species1
-
 developRaw <- function(species) {
-    # from the occurence data at the species level select specific species and write out rew dataset
+    # from the occurence data select specific species and write out raw dataset
     rawData <<- genusOcc[genusOcc$taxon == species, ]
     write.csv(rawData, file = paste0(sp_dir,"/occurrences/rawData.csv"),row.names = FALSE)
 }
-
-D:/cwrNA/src/dataPrep/filterByStatePrep.R 
-
-###
-# filtering the state level occurence data by genus, and generate unique names of occurences per species 
-# 20200127 
-# dan.carver@carverd.com 
-### 
-
-### commented out because this is not a necessary step each time the models is ran 
-# 
-# library(tidyverse)
-# library(sp)
-# library(tmap)
-# tmap::tmap_mode("view")
-# 
-# # load in country SHP 
-# 
-# # load in state gadm 
-# rds <- list.files(path = "D:/cwrNA/parameters/statesByCountry",pattern = ".rds", full.names = TRUE )
-# 
-# # find a way to read in all and create on file 
-# for(i in 1:length(rds)){
-#   print(i)
-#   if(i == 1){
-#     states <- readRDS(rds[i])
-#   }else{
-#     v <- readRDS(rds[i])
-#     states <- rbind(states, v) 
-#     print(paste0(rds[i]," has been added"))
-#   }
-# }
-# 
-# # write out sp object 
-# saveRDS(object = states, file = "D:/cwrNA/parameters/statesByCountry/gadmCanUsaMex_sp.rds")
 D:/cwrNA/src/dataPrep/genCounts.r 
 
 ####
@@ -1989,90 +1953,45 @@ testLatLong <- function(species){
 
     write.csv(countsData, file = paste0(sp_dir,"/counts.csv"),row.names = FALSE)
 }
-D:/cwrNA/src/dataPrep/nat_area_shpNAonly.R 
+D:/cwrNA/src/dataPrep/nat_area_shp.r 
 
 ###
 # generate the native area mask based on intersection between points, ecoregions, and countries
-# 20190830
-# carver.dan1@gmail.com
+# dan.carver@carverd.com
+# 20200414
 ###
 
-#species <- species1
 
 nat_area_shp <- function(species) {
+  # clause for seeing if the product already exist
   if (file.exists(paste0(sp_dir, "/modeling/nativeArea/narea.shp"))){
-    nativeArea<<-readOGR(paste0(sp_dir, "/modeling/nativeArea/narea.shp"),verbose = FALSE)}
+    nativeArea <<-readOGR(paste0(sp_dir, "/modeling/nativeArea/narea.shp"),verbose = FALSE)}
   else{
-  # define CRS to be equal between points and ecoRegions
-  crs(cleanPoints) <- crs(ecoReg)
-  
-  # test to see which ecoregions have points within them 
-  ecoVal <- data.frame(over(x = cleanPoints, y = ecoReg))%>%
-    dplyr::select(ECO_ID_U )%>%
-    distinct()%>%
-    drop_na()
-  if(length(ecoVal$ECO_ID_U) == 0 ){
-    print(paste0("No ecoregions intersected with the occurence data. Species can not be modeled."))
-  return("No Native Area")
-    }else{
-    # subset ecoRegions that have points within them 
-    ecoAreas <- subset(ecoReg, ECO_ID_U %in% ecoVal$ECO_ID_U) ### DC added dissolve 
-    # clip ecoregions to countries with points present
-    clipArea <-rgeos::gIntersection(ecoAreas, naSHP)
-    nativeArea <<- SpatialPolygonsDataFrame(clipArea, data.frame(ID=1:length(clipArea)))
-    
-    #write out feature
-    setwd(paste0(sp_dir, "/modeling/nativeArea"))
-    writeOGR(obj=nativeArea, dsn="narea.shp", layer="narea", driver="ESRI Shapefile") # this is in geographical projection
-    return(nativeArea)
-  }
-  }
-}
-
-D:/cwrNA/src/dataPrep/spatialPointObject.R 
-
-###
-# call in the raw data and generate a spatial points dataframe
-# 20199827
-# carver.dan1@gmail.com
-### 
-
-#species <- species1
-
-spPoints <- function(species){
-    latLong <- dataThin %>%
-      filter(hasLatLong == TRUE)
-    latLong$latitude <- as.numeric(as.character(latLong$latitude))
-    latLong$longitude <- as.numeric(as.character(latLong$longitude))
-    latLong <- latLong[complete.cases(latLong[ , 6:7]),]
-    
-    if(nrow(latLong)>0){
-      #https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information
-      ### test1 for capsicum
-      #gs <- latLong %>% filter(type=="G") %>%dplyr::select(longitude,latitude) 
-      
-      coord <- dplyr::select(latLong, longitude,latitude) 
-  
-      spPoint <<- SpatialPointsDataFrame(coord,
-                                        data = latLong)
-      #proj4string = CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
-      if( nrow(spPoint@data) == 0){
-        print("there are no coodinate pairs for this species")
-        spPoint <<- "no data available"
-      }
-      # mask to North America 
-      crs(spPoint) <- crs(naSHP)
-      intersect1 <- intersect(spPoint, naSHP)
-      if(nrow(intersect1)==0){
-        spPoint <<- "no data available"
+    # define CRS to be equal between points and ecoRegions
+    crs(cleanPoints) <- crs(ecoReg)
+    # test to see which ecoregions have points within them
+    ecoVal <- data.frame(over(x = cleanPoints, y = ecoReg))%>%
+      dplyr::select(ECO_ID_U )%>%
+      distinct()%>%
+      drop_na()
+    #Probably don't need this cause, as all occurrence should be land points,
+    # but it's an easy check
+    if(length(ecoVal$ECO_ID_U) == 0 ){
+      print(paste0("No ecoregions intersected with the occurence data. Species can not be modeled."))
       }else{
-        spPoint <<- intersect1
-        write.csv(spPoint@data,file = paste0(sp_dir,"/occurrences/rawDataForNA.csv"),row.names = FALSE)
-      }
-    }else{
-      print("there are no coodinate pairs for this species")
-      spPoint <<- "no data available"
+        # subset ecoRegions that have points within them
+        ecoAreas <- subset(ecoReg, ECO_ID_U %in% ecoVal$ECO_ID_U)
+        # clip ecoregions to countries with points present
+        clipArea <-rgeos::gIntersection(ecoAreas, naSHP)
+        nativeArea <<- SpatialPolygonsDataFrame(clipArea, data.frame(ID=1:length(clipArea)))
+
+        # write out spatail feature
+        # I was having issues with writeOGR and providing the full file path, This
+        # should be cleaned up as setwd could cause issues down the line
+        setwd(paste0(sp_dir, "/modeling/nativeArea"))
+        writeOGR(obj=nativeArea, dsn="narea.shp", layer="narea", driver="ESRI Shapefile") # this is in geographical projection
     }
+  }
 }
 D:/cwrNA/src/dataPrep/speciesCheckWithUSDAGrin.R 
 
@@ -2106,103 +2025,104 @@ D:/cwrNA/src/dataPrep/speciesCheckWithUSDAGrin.R
 # drop cucurbitas and capsicum
 #noOcc1 <- noOcc[-c(2,3,4,5,6)]
 #noOcc1
-D:/cwrNA/src/dataPrep/subSampleContry.R 
+D:/cwrNA/src/dataPrep/spPoints.r 
 
 ###
-# sub sample feautres based on country if there are over 2000 
-# 20190828
-# carver.dan1@gmail.com 
+# call in the raw data and generate a spatial points dataframe
+# dan.carver@carverd.com
+# 20200414
 ###
 
-#Maria Victoria Diaz
-#CIAT, 2018
+spPoints <- function(species){
+    # select all  rows with valid lat long
+    latLong <- dataThin %>%
+      dplyr::filter(hasLatLong == TRUE)
+    latLong$latitude <- as.numeric(as.character(latLong$latitude))
+    latLong$longitude <- as.numeric(as.character(latLong$longitude))
+    latLong <- latLong[complete.cases(latLong[ , 6:7]),]
 
-# This function makes a stratified sampling of the species that have more than 2000 ocurrences
-# @param (string) species: Species ID.
-# @return (dataFrame): This function return a DataFrame with a sample of the total records of the species. 
+    if(nrow(latLong)>0){
+      #https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information
+      coord <- latLong %>% dplyr::select(longitude,latitude)
 
-#species="5358748"
+      spPoint <<- sp::SpatialPointsDataFrame(coord,
+                                        data = latLong)
+      # clause for no lat long data
+      if( nrow(spPoint@data) == 0){
+        print("there are no coodinate pairs for this species")
+        spPoint <<- "no data available"
+      }
+      # mask to North America
+      crs(spPoint) <- crs(naSHP)
+      intersect1 <- intersect(spPoint, naSHP)
+      if(nrow(intersect1)==0){
+        spPoint <<- "no data available"
+      }else{
+        spPoint <<- intersect1
+        write.csv(spPoint@data,file = paste0(sp_dir,"/occurrences/rawDataForNA.csv"),row.names = FALSE)
+      }
+    }else{
+      print("there are no coodinate pairs for this species")
+      spPoint <<- "no data available"
+    }
+}
+D:/cwrNA/src/dataPrep/subSampleByCountry.r 
 
+###
+# sub sample feautres based on country if there are over 2000
+# 20200414
+# dan.carver@carverd.com
+# based on work by
+# Maria Victoria Diaz
+# CIAT, 2018
+###
 
-sampling<-function(species){
+subSampleByCountry<-function(species){
+  set.seed(1234)
+  # the 2000 occurrence limit only applies to H points. This spilts the data.
   d1 <- cleanPoints@data %>%
     dplyr::filter(type == "H")
-  dG <- cleanPoints@data %>% 
+  dG <- cleanPoints@data %>%
     dplyr::filter(type == "G")
+  # determine number of unique countries
   countries<- unique(na.omit(d1$iso3_check))
   count_occ<-nrow(d1)
 
-  p<-c()
-  n<-c()
-  x<-data.frame()
-  y<-c()
-  muestra<-list()
-  
-  
-  for(i in 1:length(countries)){
-    
-    n[i]<-nrow(d1[which(d1$iso3_check==countries[i]),])
-    p[i]<-n[i]/count_occ
-    
-  }
-  if(count_occ>= numPoints+1){
-    
+  # numPoints is a user define variable in runLineal, it is set to 2000
+  if(count_occ >= numPoints+1){
+    p<-c()
+    n<-c()
+    x<-data.frame()
+    y<-c()
+    muestra<-list()
+
+
+    for(i in 1:length(countries)){
+      n[i]<-nrow(d1[which(d1$iso3_check==countries[i]),])
+      p[i]<-n[i]/count_occ
+    }
+    # this is the subsample method from install_github("DFJL/SamplingUtil")
     nsizeProp<-nstrata(n=numPoints,wh=p,method="proportional")
     smple<-list()
     for(i in 1:length(countries)){
       smple[[i]]<-sample(rownames(d1[which(d1$iso3_check==countries[i]),]), size=nsizeProp[i], replace=F)
       muestra[[i]]<-d1[smple[[i]],]
-      
+
     }
-    
+
     muestra<- do.call(rbind, muestra)
-    
-    
+
+
   }else{
-    
+
     muestra<-d1
   }
-  
-  cleanData <<-rbind(data.frame(muestra), dG)
+  cleanData <- rbind(data.frame(muestra), dG)
   write.csv(cleanData, file = paste0(sp_dir,"/cleanedModelingData.csv"),row.names = FALSE)
+  # reassign cleanPoints to represent the subsampled data
   cleanPoints <<- SpatialPointsDataFrame(coords = cleanData[,c(3,2)], data = cleanData)
   raster::crs(cleanPoints) <- raster::crs(ecoReg)
 }
-
-
-
-
-D:/cwrNA/src/dataPrep/updateCounts.R 
-
-### 
-# update the counts CSV to reflect the useable points that are included in
-# the modeling method. 
-# dan.carver@carverd.com 
-# 20200129
-###
-
-updateCounts <- function(species){
-  # read in existing counts csv 
-  c1 <- read.csv( file = paste0(sp_dir,"/counts.csv"))
-  
-  # pull ddata from cleanPoints feature 
-  d1 <- cleanPoints@data
-  
-  # generate a summary table based on lat long values 
-  tbl <- d1 %>%
-    dplyr::group_by(type, hasLatLong ) %>%
-    dplyr::summarize(total = n())
-  # replace all the values that have 
-  c1$totalUseful <- sum((subset(tbl, hasLatLong == TRUE))$total)
-  c1$totalGUseful <- sum((subset(tbl, type == "G" & hasLatLong == TRUE))$total)
-  c1$totalHUseful <- sum((subset(tbl, type == "H" & hasLatLong == TRUE))$total)
-  c1$hasLat <- sum(dataThin$hasLat)
-  c1$hasLong <- sum(dataThin$hasLong)
-  c1$numberOfUniqueSources <- n_distinct(c1$numberOfUniqueSources)
-
-  write.csv(x = c1, file = paste0(sp_dir,"/counts.csv"))
-}
-
 D:/cwrNA/src/gapAnalysis/combined/fcs_combine.R 
 
 ###
@@ -2268,36 +2188,27 @@ fcs_combine <- function(species) {
   write.csv(data_comb, paste(comb_dir,"/fcs_combined.csv",sep=""), row.names=F)
   return(data_comb)
 }
-D:/cwrNA/src/gapAnalysis/exsitu/ersEx.R 
+D:/cwrNA/src/gapAnalysis/exsitu/ers_exsitu.r 
 
-##########################################   Start Functions    ###############################################
-# This function calculates the ERSex It loads occurrences if they exist, then
-# loads the presence/absence surface, creates the G buffer (i.e. CA50) and finally
-# outputs the ERS and # eco classes in a data.frame (which is written into a file).
-# @param (string) species: species ID
-# @param (logical) debug: whether to save or not the intermediate raster outputs
-# @return (data.frame): This function returns a data frame with ERS, # eco classes 
-#                       of G buffer (i.e. CA50) and of the presence/absence surface.
+###
+# calculates the total ecoregions within modeled area where G occurrences have
+# been collected
+# dan.carver@carverd.com
+# 20200414
+###
 
-#species <- species1
 ers_exsitu <- function(species) {
     #load counts
     sp_counts <- read.csv(paste0(sp_dir,"/counts.csv"))
-    
-    # #area of model clipped to native area
-    # 
-    # # area of g points clipped to native area
-    # 
-    # # number of ecoregions present in model 
-    # 
+
     crs(cleanPoints) <- crs(ecoReg)
+
     ecoVal <- data.frame(over(x = cleanPoints , y = ecoReg))%>%
       dplyr::select(ECO_ID_U )%>%
       distinct() %>%
       drop_na()
 
-    
-    #run only for spp with occ file
+    # Clause for species with no g points, as no buffer object has been created.
     if (!file.exists(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))) {
       ers <- 0
       ecoValsGLen <- NA
@@ -2305,58 +2216,52 @@ ers_exsitu <- function(species) {
       out_df <- data.frame(ID=species, SPP_N_ECO=0, G_N_ECO=0, ERS=ers)
       write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/ers_result.csv",sep=""),row.names=F)
     }else{
-      
-      #load g buffer 
+      #load g buffer
       gBuffer <- raster::raster(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))
-      # load in threshold model 
+      # load in threshold model
       pa_spp <<- raster(paste0(sp_dir,"/modeling/spdist_thrsld_median.tif"))
       # this area method accounts for 0 and 1, need to replace 0 with NA values before determining the area
-      pa_spp[pa_spp==0] <- NA 
-      # mask to native area 
+      pa_spp[pa_spp==0] <- NA
+      # mask to native area
       gBuffer <- gBuffer * pa_spp
 
+      #clause to test if any buffered area is within predicted area
       if(1 %in% unique(values(gBuffer))){
-        # not needed because the gBuffer object only has values of 1 
-        #gBuffer[which(gBuffer[] == 0)] <- NA
+        # not needed because the gBuffer object only has values of 1
         gPoints <- sp::SpatialPoints(raster::rasterToPoints(gBuffer))
-        # extract values from ecoregions to points 
+        # extract values from ecoregions to points
         crs(gPoints) <- crs(ecoReg)
         ecoValsG <- sp::over(x = gPoints, y = ecoReg) %>%
-          distinct(ECO_ID_U ) 
-        
+          distinct(ECO_ID_U )
+
         ecoValsGLen <- length(ecoValsG[!is.na(ecoValsG$ECO_ID_U),])
-        
-        
-        # number of ecoRegions present in all points 
+
+        # number of ecoRegions present in all points
         ecoValsAllPointsLen <<- nrow(ecoVal)
-        
+
         #calculate ERS
         ers <- min(c(100, (ecoValsGLen/ecoValsAllPointsLen)*100))
         #create data.frame with output
         out_df <- data.frame(ID=species, SPP_N_ECO=ecoValsAllPointsLen, G_N_ECO=ecoValsGLen, ERS=ers)
         write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/ers_result.csv",sep=""),row.names=F)
-        
+
       }else{
+        # clause for when no buffered area exists within distribution
         ers <- 0
         out_df <- data.frame(ID=species, SPP_N_ECO=0, G_N_ECO=0, ERS=ers)
         write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/ers_result.csv",sep=""),row.names=F)
-      }        
-
+      }
     }
 }
+D:/cwrNA/src/gapAnalysis/exsitu/fcs_exsitu.r 
 
-D:/cwrNA/src/gapAnalysis/exsitu/fcsEx.R 
-
-##########################################   Start Functions    ###############################################
-# This function calculates the FCSex. It loads srs.csv, grs.csv, ers.csv and
-# calculates FCS. It saves output in summary.csv
-# @param (string) species: species ID
-# @return (data.frame): This function returns a data frame with ID, SRS, GRS, ERS, FCS
-#                       for a given species.
-
+###
+# generates the final exsitu score. srs + grs + ers / 3
+# dan.carver@carverd.compare
+# 20200414
+###
 
 fcs_exsitu <- function(species) {
-
   #load SRS, GRS, and ERS file
   if(file.exists(paste0(sp_dir,"/gap_analysis/exsitu/srs_result.csv"))){
     sp_srs <- read.csv(paste0(sp_dir,"/gap_analysis/exsitu/srs_result.csv"))
@@ -2367,13 +2272,12 @@ fcs_exsitu <- function(species) {
   if(file.exists(paste0(sp_dir,"/gap_analysis/exsitu/ers_result.csv"))){
     sp_ers <- read.csv(paste0(sp_dir,"/gap_analysis/exsitu/ers_result.csv"))
   }
-  
-  
+
+  # clause to see if a model was successfully ran
   if(file.exists(paste0(sp_dir,"/gap_analysis/exsitu/grs_result.csv")) &
      file.exists(paste0(sp_dir,"/gap_analysis/exsitu/ers_result.csv"))){
     sp_fcs <- mean(c(sp_srs$SRS,sp_grs$GRS,sp_ers$ERS), na.rm=T)
-    
-    
+
     #assign classes (min)
     if (sp_fcs < 25) {
       score <- "HP"
@@ -2389,9 +2293,10 @@ fcs_exsitu <- function(species) {
     #create data.frame with output
     write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/summary.csv",sep=""),row.names=F)
   }else{
+    #clause for if only SRS has be ran
     sp_fcs <- sp_srs$SRS
-    
-    #assign classes 
+
+    #assign classes
     if (sp_fcs < 25) {
       score <- "HP"
     } else if (sp_fcs >= 25 & sp_fcs < 50) {
@@ -2401,105 +2306,90 @@ fcs_exsitu <- function(species) {
     } else {
       score <- "SC"
     }
-    out_df <- data.frame(ID=species, SRS=sp_srs$SRS, GRS=NA, 
+    out_df <- data.frame(ID=species, SRS=sp_srs$SRS, GRS=NA,
                          ERS=NA, FCS=sp_fcs, FCS_Score = score)
     #create data.frame with output
     write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/summary.csv",sep=""),row.names=F)
   }
-  
-
-  #return object
-  return(out_df)
 }
+D:/cwrNA/src/gapAnalysis/exsitu/grs_exsitu.r 
 
+###
+# determines the total buffered area of g points withing modeled area
+# dan.carver@carverd.com
+# 20200414
+###
 
-D:/cwrNA/src/gapAnalysis/exsitu/GRSex.R 
-
-##########################################   Start Functions    ###############################################
-# This function calculates the GRSex. It loads occurrences if they exist, then
-# loads the presence/absence surface, creates the G buffer (i.e. CA50) and finally
-# outputs the GRS and areas in a data.frame (which is written into a file).
-# @param (string) species: species ID
-# @param (logical) debug: whether to save or not the intermediate raster outputs
-# @return (data.frame): This function returns a data frame with GRS and areas of G buffer (i.e. CA50)
-#                       and of the presence/absence surface.
-
-#species <- species1
 grs_exsitu <- function(species) {
-  
+  # clause to see if any g points exist
   if(!file.exists(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))){
     grs <- 0
     gBufferRas_area <- 0
     pa_spp_area <- NA
   }else{
-  
-  # load in thrsld raster 
+
+  # load in thrsld raster
   pa_spp <<- raster(paste0(sp_dir,"/modeling/spdist_thrsld_median.tif"))
   # this area method accounts for 0 and 1, need to replace 0 with NA values before determining the area
-  pa_spp[pa_spp==0] <- NA 
+  pa_spp[pa_spp==0] <- NA
   cell_size<- area(pa_spp, na.rm=TRUE, weights=FALSE)
   cell_size<- cell_size[!is.na(cell_size)]
   pa_spp_area <<-length(cell_size)*median(cell_size)
-    
-  
-  # load in ga50 and model outputs 
+
+
+  # load in ga50 and model outputs
   gBufferRas <- raster::raster(paste0(sp_dir,"/modeling/alternatives/ga50.tif"))
-  # mask buffer raster to the GA50 area 
+  # mask buffer raster to the GA50 area
   gBufferRas1 <<- gBufferRas * pa_spp
-  
+
+  # clause to determine if any of the buffered area falls within predicted area
   if(length(unique(values(gBufferRas1)))==1 ){
     grs <- 0
     gBufferRas_area <- 0
     pa_spp_area <- NA
   }else{
-    cell_size<-area(gBufferRas1, na.rm=TRUE, weights=FALSE)
-    cell_size<-cell_size[!is.na(cell_size)]
-    gBufferRas_area<<-length(cell_size)*median(cell_size)
-    
-    
-    
-    #calculate GRS
-    grs <- min(c(100, gBufferRas_area/pa_spp_area*100))
+      cell_size<-area(gBufferRas1, na.rm=TRUE, weights=FALSE)
+      cell_size<-cell_size[!is.na(cell_size)]
+      gBufferRas_area<<-length(cell_size)*median(cell_size)
+
+
+
+      #calculate GRS
+      grs <- min(c(100, gBufferRas_area/pa_spp_area*100))
+    }
   }
-  } 
-    
+
   #create data.frame with output
   out_df <- data.frame(ID=species, SPP_AREA_km2=pa_spp_area, G_AREA_km2=gBufferRas_area, GRS=grs)
   write.csv(out_df,paste(sp_dir,"/gap_analysis/exsitu/grs_result.csv",sep=""),row.names=F)
-    
-  #return object
-  return(out_df)
 }
+D:/cwrNA/src/gapAnalysis/exsitu/srs_exsitu.R 
 
+###
+# generates the srs exsitu values based on the counts data
+# dan.carver@carverd.com
+# 20200414
+###
 
-D:/cwrNA/src/gapAnalysis/exsitu/srsEx.R 
-
-
-##########################################   Start Functions    ###############################################
-# This function calculates the ex-situ SRS. It loads counts.csv and computes SRS
-# @param (string) species: species ID
-# @return (data.frame): This function returns a data frame with SRS, and numbers
-#                       of G, H, and total samples, with and without coordinates.
-
-#species <- species1
 srs_exsitu <- function(species) {
-
+  # read in data
   sp_counts <<- read.csv(paste0(sp_dir,"/counts.csv"))
-  
+  # caluse for no g points
   if(sp_counts$totalGRecords >= 1 & sp_counts$totalHRecords == 0){
     srs <-100
   }
-  
-  #### this works for full distributions
+
+  #clause for no data
   if (sp_counts$totalGRecords == 0 & sp_counts$totalHRecords ==0) {
     srs <- 0
   } else {
+    # clause for species with data
     srs <- min(c(100,sp_counts$totalGRecords/sp_counts$totalHRecords*100))
   }
-  
-  
+
+
   #create data.frame with output
-  out_df <- data.frame(ID=species, 
+  out_df <- data.frame(ID=species,
                        NTOTAL=sp_counts$totalRecords,
                        NTOTAL_COORDS=sp_counts$totalUseful,
                        NG= sp_counts$totalGRecords,
@@ -2508,92 +2398,81 @@ srs_exsitu <- function(species) {
                        NH_COORDS=sp_counts$totalHUseful,
                        SRS=srs)
   write.csv(out_df,paste0(sp_dir,"/gap_analysis/exsitu/srs_result.csv"),row.names=F)
-  
-  
-  #return object
-  return(out_df)
 }
-
-#testing the function
-#base_dir <- "~/nfs"
-#source("~/Repositories/aichi13/src/config.R")
-#srs_exsitu("2686262")
-
-D:/cwrNA/src/gapAnalysis/insitu/ersIn.R 
+D:/cwrNA/src/gapAnalysis/insitu/ers_insitu.r 
 
 ###
 # calculate the ers insitu = ecoregions in protected areas / ecoregions in SDM *100
-# 20190919
-# carver.dan1@gmail.com
+# 20200414
+# dan.carver@carverd.com
 ###
-ers_insitu <- function(species) {
 
-    # import threshold and use it to mask protected area so only the pro in the predicted area are 
+ers_insitu <- function(species) {
+    # import threshold and use it to mask protected area so only the pro in the predicted area are
     pa_spp <<- raster(paste0(sp_dir,"/modeling/spdist_thrsld_median.tif"))
     # this area method accounts for 0 and 1, need to replace 0 with NA values before determining the area
-    pa_spp[pa_spp==0] <- NA 
+    pa_spp[pa_spp==0] <- NA
+    # clause for no predicted present in thrshold raster
     if(is.na(unique(values(thrshold)))){
-      ecoInSDM <-0 
-      ecoInProt <- 
+      ecoInSDM <-0
+      ecoInProt <-
       ers <- 0
-    }else{
-    
-    crs(pa_spp) <- crs(proArea)
-    proNative <- raster::crop(x = proArea, y = pa_spp)
-    proNative <- proNative * pa_spp
-    
-    if(length(unique(values(proNative)))==1){
-      ers <- 0
-      ecoInProt <- 0 
-      # number of ecoregion in the SDM 
-      thrsPoints <- sp::SpatialPoints(raster::rasterToPoints(pa_spp))
-      crs(thrsPoints) <- crs(ecoReg)
-      ecoVal <- data.frame(over(x = thrsPoints, y = ecoReg))%>%
-        dplyr::select(ECO_ID_U )%>%
-        distinct() %>%
-        drop_na()
-      
-      ecoInSDM <- nrow(ecoVal)
-    }else{
-      # load in protected area maps and convert to points 
-      protectPoints <- sp::SpatialPoints(raster::rasterToPoints(proNative))
-      # extract values from ecoregions to points 
-      crs(protectPoints) <- crs(ecoReg)
-      ecoValsProt <- sp::over(x = protectPoints, y = ecoReg) %>%
-        dplyr::select(ECO_ID_U )%>%
-        distinct(ECO_ID_U ) %>%
-        drop_na()
-      #number of ecoRegions in protected areas 
-      ecoInProt <- nrow(ecoValsProt)
-      
-      # number of ecoregion in the SDM 
-      thrsPoints <- sp::SpatialPoints(raster::rasterToPoints(pa_spp))
-      crs(thrsPoints) <- crs(ecoReg)
-      ecoVal <- data.frame(over(x = thrsPoints, y = ecoReg))%>%
-        dplyr::select(ECO_ID_U )%>%
-        distinct() %>%
-        drop_na()
-      
-      ecoInSDM <- nrow(ecoVal)
-    
-      #calculate ERS
-      ers <- min(c(100, (ecoInProt/ecoInSDM)*100))
+      }else{
+      crs(pa_spp) <- crs(proArea)
+      proNative <- raster::crop(x = proArea, y = pa_spp)
+      proNative <- proNative * pa_spp
+
+      if(length(unique(values(proNative)))==1){
+        ers <- 0
+        ecoInProt <- 0
+        # number of ecoregion in the SDM
+        thrsPoints <- sp::SpatialPoints(raster::rasterToPoints(pa_spp))
+        crs(thrsPoints) <- crs(ecoReg)
+        ecoVal <- data.frame(over(x = thrsPoints, y = ecoReg))%>%
+          dplyr::select(ECO_ID_U )%>%
+          distinct() %>%
+          drop_na()
+
+        ecoInSDM <- nrow(ecoVal)
+          }else{
+          `  # load in protected area maps and convert to points
+            protectPoints <- sp::SpatialPoints(raster::rasterToPoints(proNative))
+            # extract values from ecoregions to points
+            crs(protectPoints) <- crs(ecoReg)
+            ecoValsProt <- sp::over(x = protectPoints, y = ecoReg) %>%
+              dplyr::select(ECO_ID_U )%>%
+              distinct(ECO_ID_U ) %>%
+              drop_na()
+            #number of ecoRegions in protected areas
+            ecoInProt <- nrow(ecoValsProt)
+
+            # number of ecoregion in the SDM
+            thrsPoints <- sp::SpatialPoints(raster::rasterToPoints(pa_spp))
+            crs(thrsPoints) <- crs(ecoReg)
+            ecoVal <- data.frame(over(x = thrsPoints, y = ecoReg))%>%
+              dplyr::select(ECO_ID_U )%>%
+              distinct() %>%
+              drop_na()
+
+            ecoInSDM <- nrow(ecoVal)
+
+            #calculate ERS
+            ers `<- min(c(100, (ecoInProt/ecoInSDM)*100))
+        }
       }
-    }
         #create data.frame with output
     df <- data.frame(ID=species, SPP_N_ECO = ecoInSDM, SPP_WITHIN_PA_N_ECO = ecoInProt, ERS = ers)
     write.csv(df,paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"),row.names=F)
-    #return object
 }
-
-D:/cwrNA/src/gapAnalysis/insitu/fcsIn.R 
+D:/cwrNA/src/gapAnalysis/insitu/fcs_insitu.r 
 
 ###
-# calcualte the fcsIn = GRSin +ERSin / 2 
-
+# calcualte the fcsIn = SRSin + GRSin +ERSin / 3
+# dan.carver@carverd.com
+# 20200414
+###
 
 fcs_insitu <- function(species) {
-  
   #load SRS, GRS, and ERS file
   if(file.exists(paste0(sp_dir,"/gap_analysis/insitu/srs_result.csv"))){
     sp_srs <- read.csv(paste0(sp_dir,"/gap_analysis/insitu/srs_result.csv"))
@@ -2604,11 +2483,11 @@ fcs_insitu <- function(species) {
   if(file.exists(paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"))){
     sp_ers <- read.csv(paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"))
   }
-
+  # clause for successful model, SRSin can be ran without a modeled area
   if(file.exists(paste0(sp_dir,"/gap_analysis/insitu/grs_result.csv"))&
      file.exists(paste0(sp_dir,"/gap_analysis/insitu/ers_result.csv"))){
     sp_fcs <- mean(c(sp_srs$SRS,sp_grs$GRS,sp_ers$ERS), na.rm=T)
-    
+
     #assign classes (min)
     if (sp_fcs < 25) {
       score <- "HP"
@@ -2625,10 +2504,11 @@ fcs_insitu <- function(species) {
                         ERS=sp_ers$ERS, FCS=sp_fcs, FCS_Score = score)
     #create data.frame with output
     write.csv(outDf,paste(sp_dir,"/gap_analysis/insitu/summary.csv",sep=""),row.names=F)
-    
+
   }else{
+    # clause for when only SRSin has been ran 
     sp_fcs <- sp_srs$SRS
-    
+
     #assign classes (min)
     if (sp_fcs < 25) {
       score <- "HP"
@@ -2644,193 +2524,169 @@ fcs_insitu <- function(species) {
                         ERS=NA, FCS=sp_fcs, FCS_Score = score)
     write.csv(outDf,paste(sp_dir,"/gap_analysis/insitu/summary.csv",sep=""),row.names=F)
   }
-  
+
   #return object
   return(outDf)
 }
-
-
-D:/cwrNA/src/gapAnalysis/insitu/grsIn.R 
+D:/cwrNA/src/gapAnalysis/insitu/insitu_grs.r 
 
 ###
 # Calculate the GRSin = area in protect areas / total area * 100
-# 20190919
-# carver.dan1@gmail.com
+# 20200414
+# dan.carver@carverd.com
 ###
-
-#species=species1
 
 insitu_grs = function(species) {
       #GRSin = area in protect areas / total area * 100
-  
-      # read in threshold raster 
-      thrshold <- raster(x = paste0(sp_dir, "/modeling/spdist_thrsld_median.tif")) 
+      # read in threshold raster
+      thrshold <- raster(x = paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"))
+      # replace 0 with NA
       thrshold[which(thrshold[] == 0)] <- NA
+      #clause for no predicted suitable habitat
       if(is.na(unique(values(thrshold)))){
         protect_area <- 0
-        grs <- 0 
+        grs <- 0
         thrshold_area <- 0
       }else{
-        
-        # mask protect area to native area 
+        # mask protect area to native area
         proNative <- raster::crop(x = proArea, y = thrshold)
-        #proNative[is.na(proNative)]<- 0
-        # add threshold raster to protect areas 
-        protectSDM <- thrshold * proNative 
+        # add threshold raster to protect areas
+        protectSDM <- thrshold * proNative
         writeRaster(x = protectSDM,filename = paste0(sp_dir,"/modeling/alternatives/grs_pa_PAs_narea_areakm2.tif" ), overwrite=TRUE)
-        
-        ### issue if protected area in threshold equal zero 
+
+        ### clause for no protected area in threshold area
         if(length(unique(values(protectSDM))) == 1){
           protect_area <- 0
-          grs <- 0 
-          # calculate total species area 
+          grs <- 0
+          # calculate total species area
           cell_size<-area(thrshold, na.rm=TRUE, weights=FALSE)
           cell_size<-cell_size[!is.na(cell_size)]
           thrshold_area <- length(cell_size)*median(cell_size)
-          
+
         }else{
           #calculated the area of cells with in protect areas within the threshold area
           protectSDM[which(protectSDM[] == 0)] <- NA
           cell_size<-area(protectSDM, na.rm=TRUE, weights=FALSE)
           cell_size<-cell_size[!is.na(cell_size)]
           protect_area <-length(cell_size)*median(cell_size)
-          # complete for threshold predicted area 
-          # 20200107
+          
+          # complete for threshold predicted area
           cell_size<-area(thrshold, na.rm=TRUE, weights=FALSE)
           cell_size<-cell_size[!is.na(cell_size)]
           thrshold_area <-length(cell_size)*median(cell_size)
-          
+
           #calculate GRS
           grs <- min(c(100, protect_area/thrshold_area*100))
-          
+
         }
       }
     #create data.frame with output
     df <- data.frame(ID = species, SPP_AREA_km2 = thrshold_area, SPP_WITHIN_PA_AREA_km2 = protect_area, GRS = grs)
     write.csv(df,paste(sp_dir,"/gap_analysis/insitu/grs_result.csv",sep=""),row.names=F)
 }
-
-
-
-
-D:/cwrNA/src/gapAnalysis/insitu/srsIn.R 
+D:/cwrNA/src/gapAnalysis/insitu/srs_insitu.r 
 
 ###
 # Calculate the proportion of points that fall within a protected areas found within the predicted
-# model extent. Insitu SRS 
+# model extent. Insitu SRS
 # 20200303
 # dan.carver@carverd.com
 ###
 
-
-#species <- species1
 srs_insitu <- function(species) {
 
   totalNum <- nrow(cleanPoints)
 
-  # read in threshold raster 
-  thrshold <- raster(x = paste0(sp_dir, "/modeling/spdist_thrsld_median.tif")) 
+  # read in threshold raster
+  thrshold <- raster(x = paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"))
   thrshold[which(thrshold[] == 0)] <- NA
-  # mask protect area to native area 
+  # mask protect area to native area
   proNative <- raster::crop(x = proArea, y = thrshold)
   #proNative[is.na(proNative)]<- 0
-  # add threshold raster to protect areas 
-  protectSDM <- thrshold * proNative 
-  
-  # set coodinate systems equal  
+  # add threshold raster to protect areas
+  protectSDM <- thrshold * proNative
+
+  # set coodinate systems equal
   crs(cleanPoints) = crs(protectSDM)
   # run a extract to values and select all data. Test for NA, then sum true values for total number of points in protected
-  #areas 
+  #areas
   protectPoints <- sum(!is.na(raster::extract(x = protectSDM,y = cleanPoints)))
-  
-  #define SRS 
+
+  #define SRS
   if(protectPoints >= 0 ){
     srsInsitu <- 100 *(protectPoints/totalNum)
   }else{
     srsInsitu <- 0
   }
-  
-  
+
+
   #create data.frame with output
-  out_df <- data.frame(ID=species, 
+  out_df <- data.frame(ID=species,
                        NTOTAL=totalNum,
                        ProTotal = protectPoints,
                        SRS=srsInsitu)
   write.csv(out_df,paste0(sp_dir,"/gap_analysis/insitu/srs_result.csv"),row.names=F)
-  
-  
+
+
   #return object
   return(out_df)
 }
+D:/cwrNA/src/gapAnalysis/insitu/srs_insitu_preModel.r 
 
-D:/cwrNA/src/gapAnalysis/insitu/srsInPreModel.R 
-
-### 
+###
 # Generate a SRSin base on all points before the species is modeled. So that a metric can be provided that
-# will then be replaced in the SRSin method if a species can be sucessfully modeled. 
+# will then be replaced in the SRSin method if a species can be sucessfully modeled.
 # 20200303
 # dan.carver@carverd.com
 ###
 
-
-#species <- species1
 srs_insitu_preModel <- function(species) {
-  
+  # clause for no points in north america
   if(class(spPoint) == "character"){
     #create data.frame with output
-    out_df <- data.frame(ID=species, 
+    out_df <- data.frame(ID=species,
                          NTOTAL=0,
                          ProTotal = 0,
                          SRS.SRS=0)
-    write.csv(out_df,paste0(sp_dir,"/gap_analysis/insitu/srs_result.csv"),row.names=F)
-    
+    write.csv(out_df,paste0(sp_dir,"/gap_analysis/insitu/srs_result.csv"),
+    row.names=F)
   }else{
-    
-    totalNum <- nrow(cleanPoints)
-    
-    # set coodinate systems equal  
-    crs(cleanPoints) = crs(proArea)
-    # run a extract to values and select all data. Test for NA, then sum true values for total number of points in protected
-    #areas 
-    protectPoints <- sum(!is.na(raster::extract(x = proArea,y = cleanPoints)))
-    
-    #define SRS 
+    totalNum <- nrow(spPoint)
+    # set coodinate systems equal
+    crs(spPoint) = crs(proArea)
+    # run a extract to values and select all data. Test for NA,
+    # then sum true values for total number of points in protected areas
+    protectPoints <- sum(!is.na(raster::extract(x = proArea,y = spPoint)))
+    # define SRS
     if(protectPoints >= 0 ){
       srsInsitu <- 100 *(protectPoints/totalNum)
     }else{
       srsInsitu <- 0
     }
-    
-    
+
     #create data.frame with output
-    out_df <- data.frame(ID=species, 
+    out_df <- data.frame(ID=species,
                          NTOTAL=totalNum,
                          ProTotal = protectPoints,
                          SRS.SRS=srsInsitu)
     write.csv(out_df,paste0(sp_dir,"/gap_analysis/insitu/srs_result.csv"),row.names=F)
   }
-  #return object
-  return(out_df)
 }
-
-
-
 D:/cwrNA/src/gapAnalysis/redList/eooAoo.R 
 
 ###
-# use the redListR library to calculate the EOO and AOO assessments for the species 
-# 20191004
-# carver.dan1@gmail.com
+# use the redListR library to calculate the EOO and AOO assessments for the species
+# dan.carver@carverd.com
+# 20200414
 ###
 
-# Conservation gap analysis
-eooAoo <- function(species){ 
-    ### temp addations to run low occurrence species 
+eooAoo <- function(species){
+  # clause for low occurrence species
   if(class(spPoint)== "character" | nrow(cleanPoints@data) <= 2){
     df <- data.frame(matrix(data = NA, nrow = 1, ncol = 7))
     colnames(df) <- c("taxon", "EOO Area km2","EOO Status", "AOO",
                       "AOO adjusted Minimum", "AOO Status", "Combined Status")
-    
+
     df$taxon <- species
     df$`EOO Area km2` <- NA
     df$`EOO Status`<- "Critically Endangered (CR)"
@@ -2838,18 +2694,15 @@ eooAoo <- function(species){
     df$`AOO adjusted Minimum` <- NA
     df$`AOO Status` <- "Critically Endangered (CR)"
     df$`Combined Status` <- "Critically Endangered (CR)"
-    #still run them with the html but do not display in docs
-    # DT::datatable(df)
-    write.csv(x = df, file = paste0(sp_dir, '/gap_analysis/redList/listingValues4km.csv'))
+    write.csv(x = df, file = paste0(sp_dir, '/gap_analysis/redList/listingValues4kmClean.csv'))
   }else{
-    
     if(class(cleanPoints) != "SpatialPointsDataFrame"){
       cleanPoints <- spPoint
     }
-    
-    # if(file.exists(paste0(sp_dir, "/gap_analysis/redList/listingValues.csv"))){
-    #   print('completed, moving on')
-    # }else{
+
+    if(file.exists(paste0(sp_dir, "/gap_analysis/redList/listingValues.csv"))){
+      print('completed, moving on')
+     }else{
       wgs84 <- crs("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
       worldEqualArea <- crs("+proj=cea +lon_0=0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs ")
       cleanPoints2 <- SpatialPoints(coords = cleanPoints@coords, proj4string = wgs84)
@@ -2857,7 +2710,7 @@ eooAoo <- function(species){
       EOO.polygon <- makeEOO(spAllPro)
       # then calcualte the area of the bounding box
       EOO.area <- getAreaEOO(EOO.polygon)
-      #determine status based on area
+      # determine status based on area
       if (EOO.area >= 45000){
         blo <- "Least Concern (LC)"
         eVal <- 1 }
@@ -2875,18 +2728,18 @@ eooAoo <- function(species){
         eVal <- 5} # 100
       if (EOO.area == "NA"){blo <- "Critically Endangered (CR)"
       eVal <- 6}
-      
+
       #EOO.area
       # this value is then use in the develop of other criteria in the sebcriterion B1
-      
+
       ### Subcriterion B2 (calculating AOO)
-      # create a 10 x 10 grid of to overlay on distribution.
-      
+      # create a 4 x 4 grid of to overlay on distribution.
+
       AOO.grid <- makeAOOGrid(spAllPro, grid.size = 4000,
                               min.percent.rule = F)
-      #plot(AOO.grid)
       n.AOO <- length(AOO.grid)
       AOOarea <- n.AOO * 4
+      # determine status based on area
       if (AOOarea >= 4500){
         AOO_cat <- "Least Concern (LC)"
       aVal <- 1 } # <
@@ -2901,54 +2754,47 @@ eooAoo <- function(species){
       aVal <- 5 }# < 10
       if (AOOarea == "NA"){AOO_cat <- "Critically Endangered (CR)"
       aVal <- 6 }
-      
-      
+
+
       #n.AOO
       # so the length is just the number of grid cells that overlay this environment
       # because the position of the grid cells can potential change the number of cells
       # a randomized process is used to determine a minimun number of grids.
-      
+
+      # 20200414, the n.AOO.improvement is set to one as a time saving measure.
+      # we do not use the grid uncertainty measure in the catergorization of
+      # the species, so timeliness was most important here.
       gU.results <- gridUncertainty(spAllPro, 4000,
-                                    n.AOO.improvement = 5,
+                                    n.AOO.improvement = 1,
                                     min.percent.rule = F)
-      
-      # dataframe to save items 
+
+      # dataframe to save items
       df <- data.frame(matrix(data = NA, nrow = 1, ncol = 7))
       colnames(df) <- c("taxon", "EOO Area km2","EOO Status", "AOO",
                         "AOO adjusted Minimum", "AOO Status", "Combined Status")
-      
-      
-      
-      
       df$taxon <- species
       df$`EOO Area km2` <- EOO.area
       df$`EOO Status`<- blo
       df$AOO <- n.AOO * 4
       df$`AOO adjusted Minimum` <- gU.results$min.AOO.grid$AOO.number * 4
       df$`AOO Status` <- AOO_cat
-      
-      
-      status <- c("Least Concern (LC)","Possible Near Threatened (NT)", 
-                      "Vulnerable (VU)", "Endangered (EN)" 
-                      ,"Critically Endangered (CR)","Critically Endangered (CR)")
-    
+
+      # the names for combined status
+      status <- c("Least Concern (LC)","Possible Near Threatened (NT)",
+                  "Vulnerable (VU)", "Endangered (EN)"
+                  ,"Critically Endangered (CR)","Critically Endangered (CR)")
+      # Select the lowest status and use that to define the overall status
       if(eVal >= aVal){
         stat <- status[eVal]
       }else{
         stat <- status[aVal]
       }
-      
+
       df$`Combined Status` <- stat
-      
-      
-      #still run them with the html but do not display in docs
-      # DT::datatable(df)
       write.csv(x = df, file = paste0(sp_dir, '/gap_analysis/redList/listingValues4kmClean.csv'))
     }
   }
-#}
-
-
+}
 D:/cwrNA/src/gatherAllCode.r 
 
 ### 
@@ -2972,417 +2818,304 @@ for(i in 1:length(files)){
 sink()
 D:/cwrNA/src/master.R 
 
-# This function runs the entire process for a selected species
-# @param (chr) species: species ID
-# @return (dir): status of run
-
-
-#here for troubleshooting.
-#species <- species1
+###
+# Primary function to call all functions that are a part of the modeling method. 
+# dan.carver@carver.com 
+# 20200414
+### 
 
 master_run <- function(species){
   species <<- species
-  
   print(paste0("the process for ", species, " has begun."))
+  
   # build a datframe that captures the total run time for a process.
   time_df <- data.frame(matrix(ncol = 2, nrow = 0))
   colnames(time_df) <- c("functionUsed", "runTime")
+  
   # start time for totaling run time at the end
   startTime <- Sys.time()
-
+  
   t1a <- Sys.time()
   cat("...creating directories\n")
-  spp_dirs <- create_sp_dirs(species)
+  create_sp_dirs(species)
   time_df <- rbind(time_df, data.frame(functionUsed="create_sp_dirs",  runTime=difftime(Sys.time(), t1a, units='secs')))
   # sp_dir <<- primary directory for this run
   
-  # if(file.exists(paste0(sp_dir, '/sdm.rds'))){
-  #   print('been modeled, moving on')
-  # }else{
-  t1a <- Sys.time()
-  cat("...developing raw data\n")
-  spp_raw <- developRaw(species)
-  time_df <- rbind(time_df, data.frame(functionUsed="developing raw data",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  # rawData <<- listing of all data for the species
-
-  t1a <- Sys.time()
-  cat("...generating counts csv\n")
-  genCounts1 <- try(counts1(species))
-  time_df <- rbind(time_df, data.frame(functionUsed="testLatLong",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  # dataThin <<- raw data with complete lat long and only necessary
-
-#     t1a <- Sys.time()
-#     cat("...conducting SRSex assessment\n")
-#     srsExsitu <- srs_exsitu(species)
-#     time_df <- rbind(time_df, data.frame(functionUsed="srs_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# # 
+  if(file.exists(paste0(sp_dir, '/sdm.rds'))){
+    print('been modeled, moving on')
+    }else{
     t1a <- Sys.time()
-    cat("...creating spdataframe\n")
-    spp_point <- try(spPoints(species))
+    cat("...developing raw data\n")
+    developRaw(species)
+    time_df <- rbind(time_df, data.frame(functionUsed="developing raw data",  runTime=difftime(Sys.time(), t1a, units='secs')))
+    # rawData <<- listing of all data for the species
+    
+    t1a <- Sys.time()
+    cat("...generating counts csv\n")
+    developCounts(species)
+    time_df <- rbind(time_df, data.frame(functionUsed="testLatLong",  runTime=difftime(Sys.time(), t1a, units='secs')))
+    # # dataThin <<- raw data with complete lat long and only necessary
+    
+    t1a <- Sys.time()
+    cat("...conducting SRSex assessment\n")
+    srs_exsitu(species)
+    time_df <- rbind(time_df, data.frame(functionUsed="srs_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
+    
+    t1a <- Sys.time()
+    cat("...creating spatial points data frame\n")
+    spPoints(species)
     time_df <- rbind(time_df, data.frame(functionUsed="spPoints",  runTime=difftime(Sys.time(), t1a, units='secs')))
     #spPoint <<- all usable occurence data for NA
-# 
-#     # if(class(spPoint) == 'character' ){
-#     #   print("there is not locational data for this species this is the end of the modeling process")
-#     #   #lowOccurence <<- append(lowOccurence, species)
-#     #   c1 <- read.csv(paste0(sp_dir,"/counts.csv"))
-#     #   dfCounts <- rbind(dfCounts, c1)
-#     # }else{
-#       t1a <- Sys.time()
-#     cat("...adding North American Points to Counts.csv\n")
-      naPoints <- try(addNorthAmericanCounts(species))
-      time_df <- rbind(time_df, data.frame(functionUsed="addNorthAmericanCounts",  runTime=difftime(Sys.time(), t1a, units='secs')))
-      # spPoint <<- all usable occurence data for NA
-      dfCounts <- dfCounts[complete.cases(dfCounts),]
-      testNA <-dfCounts[dfCounts$species== species,]
-# 
-# 
-#        if((testNA$NA_occurrences == 0) ){
-#         print("no proints are in NA, ending the modeling process")
-#        # lowOccurence <- append(lowOccurence, species)
-#       }else{
-#         t1a <- Sys.time()
-        cat("...extracting country values to points and remove duplicate lat long\n")
-        landPoints <- try(countryCheck(species))
-        time_df <- rbind(time_df, data.frame(functionUsed="countryCheck",  runTime=difftime(Sys.time(), t1a, units='secs')))
-       # xyData <<- coords for elements in spPoint object
-      #  cleanPoints <<- spatial points layer were all points are on land.
-
-#         ### 20200303 - adding initial srsIn metric here. If the species is modeling this result
-#         # will be overwritten
-#         t1a <- Sys.time()
-#         cat("...srsIn before the modeling process\n")
-#         srsin_Pre <-try(srs_insitu_preModel(species))
-#         time_df <- rbind(time_df, data.frame(functionUsed="srs_insitu_preModel",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-# 
-#         if(class(cleanPoints) == "character"){
-#           print(cleanPoints)
-#         }else{
-#           if(file.exists(paste0(sp_dir, '/sdm.rds'))){
-#             print('been modeled, moving on')
-#           #}else{
+    
+    t1a <- Sys.time()
+    cat("...adding North American Points to Counts.csv\n")
+    addNorthAmericanCounts(species)
+    time_df <- rbind(time_df, data.frame(functionUsed="addNorthAmericanCounts",  runTime=difftime(Sys.time(), t1a, units='secs')))
+    
+    
+    t1a <- Sys.time()
+    cat("...srsIn before the modeling process\n")
+    srs_insitu_preModel(species)
+    time_df <- rbind(time_df, data.frame(functionUsed="srs_insitu_preModel",  runTime=difftime(Sys.time(), t1a, units='secs')))
+  
+    if(class(spPoint) == 'character' ){
+    print("there is not locational data for this species this is the end of the modeling process")
+      }else{
+      cat("...extracting country values to points and remove duplicate lat long\n")
+      countryCheck(species)
+      time_df <- rbind(time_df, data.frame(functionUsed="countryCheck",  runTime=difftime(Sys.time(), t1a, units='secs')))
+      # xyData <<- coords for elements in spPoint object
+      # cleanPoints <<- spatial points layer were all points are on land.
+    
+      if(class(cleanPoints) == "character"){
+      print('no usable records for the modeling method')
+        }else{
         t1a <- Sys.time()
         cat("...spatial sample to under 2000 tota\n")
-        subSample <- try(sampling(species))
+        subSampleByCountry(species)
         time_df <- rbind(time_df, data.frame(functionUsed="sampling",  runTime=difftime(Sys.time(), t1a, units='secs')))
-        ##cleanPoints <<- if spatail thining is applied the cleanPoint var is redeclared.
-        ## code needs to be ran to this location inorder to produce htmls
-        # 
-  #           ### 20200129 - moving the redlist process to before the modeling effort as we can still
-  #           ### run red list even if the models failed. Could possible do this with the spPoint object
-  #           ### rather then the cleanPoints but I'd rather keep it here.
+        # cleanPoints <<- if spatail thining is applied the cleanPoint var is redeclared.
+        # code needs to be ran to this location inorder to produce htmls
+         
+        t1a <- Sys.time()
+        cat("...generate native area shp\n")
+        nat_area_shp(species)
+        time_df <- rbind(time_df, data.frame(functionUsed="nat_area_shp",  runTime=difftime(Sys.time(), t1a, units='secs')))
+        ##nativeArea <<- ecoregions clipped to countries with species present
+      
+        t1a <- Sys.time()
+        cat("...conducting EOO and AOO assessment\n")
+        eooAoo(species)
+        time_df <- rbind(time_df, data.frame(functionUsed="eooAoo",  runTime=difftime(Sys.time(), t1a, units='secs')))
+      
+        if(class(nativeArea)== "character"){
+        print("not enough points for modelings")
+          }else{
+          if(nrow(cleanPoints)<= 3){
+          print("not enough points for modelings")
+            }else{
+            
             t1a <- Sys.time()
-            cat("...conducting EOO and AOO assessment\n")
-            redlist <- try(eooAoo(species))
-            time_df <- rbind(time_df, data.frame(functionUsed="eooAoo",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  #
-
-  #           t1a <- Sys.time()
-  #           cat("...generate native area shp\n")
-  #           natArea <- try(nat_area_shp(species))
-  #           time_df <- rbind(time_df, data.frame(functionUsed="nat_area_shp",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  #           ##ecoVal <<- df of all eco_id present in the model. used in ERSex
-  #           ##ecoAreas <<- ecoregions that intersect with cleanPoints
-  #           ##nativeArea <<- ecoregions clipped to countries with species present
-  # 
-  #           if(class(natArea)== "character"){
-  #             print("not enough points for modelings")
-  #             # lowOccurence <<- append(lowOccurence, species)
-  #           }else{
-  # 
-  #             # run up to here in order to create single species summary html for already completed run.
-  #             if(nrow(cleanPoints)<= 3){
-  #               print("not enough points for modelings")
-  #               #lowOccurence <<- append(lowOccurence, species)
-  #             }else{
-  # 
-  #               t1a <- Sys.time()
-  #               cat("...generate ga50Raster\n")
-  #               createBuffer <- try(create_buffers(species))
-  #               time_df <- rbind(time_df, data.frame(functionUsed="create_buffers",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  #               ###
-  #               #update counts base on thinning process
-  #               t1a <- Sys.time()
-  #               cat("...update the counts csv to reflect modeled data \n")
-  #               updateCount <- try(updateCounts(species))
-  #               time_df <- rbind(time_df, data.frame(functionUsed="updateCounts",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  # 
-  #               t1a <- Sys.time()
-  #               cat("...generate background and extract raster data to background and presence data\n")
-  #               genModelData <- try(generateModelingData(species))
-  #               time_df <- rbind(time_df, data.frame(functionUsed="generateModelingData",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  #               # bioValues <<- Presence and background points with predictor data attached
-  # 
-  #               t1a <- Sys.time()
-  #               cat("...perform variable selection and correlation\n")
-  #               variableSelect <- try(varaibleSelection(species))
-  #               time_df <- rbind(time_df, data.frame(functionUsed="varaibleSelection",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  #               # bioValues <<- redefined if any NA are present in predictor datasets.
-  #               # variblesToModel <<- a listing of variable names used to modeling
-  # 
-  #               t1a <- Sys.time()
-  #               cat("...perform maxent model\n")
-  #               run_Maxnet <- try(runMaxnet(species))
-  #               time_df <- rbind(time_df, data.frame(functionUsed="runMaxnet",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  #               # sdm_results <<- output of the Maxnet modeling process
-  # 
-  #               if(!file.exists(paste0(sp_dir, "/sdm.rds"))){
-  #                 print("the model did not successfully run")
-  #                 #notModeled <<- append(notModeled,species)
-  #               }else{
-  # 
-  #                 t1a <- Sys.time()
-  #                 #this code produces the threshold raster
-  #                 test1 <- evaluate_sdm_function(species)
-  #                 time_df <- rbind(time_df, data.frame(functionUsed="evaluate_sdm_function",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  #                 ## thrshold <<- threshold raster
-  # 
-  #                 #so i'm having models with no threshold presence values... which is odd, But I'm putting a bandaid on now to push it as
-  #                 # a failed model
-  #                 if(length(unique(values(thrshold)))==2){
-  #                   print("the model did not successfully run")
-  #                   #notModeled <<- append(notModeled,species)
-  #                 }else{
-  # 
-  #                   t1a <- Sys.time()
-  #                   cat("...create a mess map based on top predictor \n")
-  #                   messMap(species)
-  #                   time_df <- rbind(time_df, data.frame(functionUsed="messMap",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  # 
-  #                   t1a <- Sys.time()
-  #                   cat("...create a kernal density map of the sample points  \n")
-  #                   try(kernalDensity(species))
-  #                   time_df <- rbind(time_df, data.frame(functionUsed="kernalDensity",  runTime=difftime(Sys.time(), t1a, units='secs')))
-  # 
-  #                   t1a <- Sys.time()
-  #                   cat("...evaluating the  model\n")
-  #                   evaluateFunction <- evaluate_function(species)
-  #                   time_df <- rbind(time_df, data.frame(functionUsed="evaluate_function",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-#             ### start of the gap analysis metrics. 
-#                     t1a <- Sys.time()
-#                     cat("...conducting GRSex assessment\n")
-#                     grsExsitu <- try(grs_exsitu(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="grs_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-#                     t1a <- Sys.time()
-#                     cat("...conducting ERSex assessment\n")
-#                     ersExsitu <- try(ers_exsitu(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="ers_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-#                     t1a <- Sys.time()
-#                     cat("...conducting  fcsex assessment\n")
-#                     fcsExsitu <- try(fcs_exsitu(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="fcs_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
-#                     
-#                     cat("...Ex situ assessment is complete\n")
-#                     #
-#                     t1a <- Sys.time()
-#                     cat("...conducting srs In assessment\n")
-#                     srsInsitu <- try(srs_insitu(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="srs_insitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-#                     t1a <- Sys.time()
-#                     cat("...conducting grs In assessment\n")
-#                     grsInsitu <- try(insitu_grs(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="insitu_grs",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-# 
-#                     ### remove try from the three functions below
-# 
-# 
-#                     t1a <- Sys.time()
-#                     cat("...conducting ers In assessment\n")
-#                     ersInsitu <- try(ers_insitu(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="ers_insitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-#                     t1a <- Sys.time()
-#                     cat("...conducting fcs In assessment\n")
-#                     fcssInsitu <- try(fcs_insitu(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="fcs_insitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
-# 
-#                     cat("...in situ assessment is complete\n")
-#                     
-#                     t1a <- Sys.time()
-#                     cat("...conducting fcs combined assessment\n")
-#                     fcsCombine <- try(fcs_combine(species))
-#                     time_df <- rbind(time_df, data.frame(functionUsed="fcs_combine",  runTime=difftime(Sys.time(), t1a, units='secs')))
-#                     
-#                     #} #temp value for species that did not model to by pass ERS
-#                     t1a <- Sys.time()
-#                     # try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/singleSpeciesSummary.rmd"),
-#                     #                       output_file =  paste("report_", species, '_', run_version,'_' , Sys.Date(), ".html", sep=''),
-#                     #                       output_dir = paste0(gap_dir,"/", genus,"/summaryDocs")))
-#                     # 
-#                     time_df <- rbind(time_df, data.frame(functionUsed="sinlge species Summary",  runTime=difftime(Sys.time(), t1a, units='secs')))
-#                     time_df$Minutes <- time_df$runTime/60
-#                     write.csv(x = time_df, file = paste0(sp_dir, "/time_df.csv"))
-#                     print(paste0("the process for ", species, " has ended."))
-#                     
-#                     #fullModelProcess <<- append(fullModelProcess, species)
-#                     
-                    rm(cleanPoints, spPoint, sp_dir, rawData, DataThin, species)
-#                     
-#                     # remove all global variables that are specific to the species
-#                     try(globalVars <- c(xyData, cleanPoints, sp_dir,rawData,dataThin,
-#                                         nativeArea, spPoint,pa_spp,ecoValsAllPointsLen,pa_spp_area,
-#                                         gBufferRas1, gBufferRas_area,sp_counts,bioValues,sdm,
-#                                         evaluate_table,sdm_results, thrshold,evaluate_table_f, crossValDir,
-#                                         rastersToModel, data_train, bioValues,
-#                                         variblesToModel,species
-#                     ))
-#                     try(rm(globalVars))
-#                     beepr::beep(1)
-#               }
-#     }
-#  }
- }
-#}
-#        }
-#      }
-#   }# this is connected to if statement about RDS file
-# }
+            cat("...generate ga50Raster\n")
+            create_buffers(species)
+            time_df <- rbind(time_df, data.frame(functionUsed="create_buffers",  runTime=difftime(Sys.time(), t1a, units='secs')))
+            
+            t1a <- Sys.time()
+            cat("...generate background and extract raster data to background and presence data\n")
+            generateModelingData(species)
+            time_df <- rbind(time_df, data.frame(functionUsed="generateModelingData",  runTime=difftime(Sys.time(), t1a, units='secs')))
+            # bioValues <<- Presence and background points with predictor data attached
+              
+            t1a <- Sys.time()
+            cat("...perform variable selection and correlation\n")
+            varaibleSelection(species)
+            time_df <- rbind(time_df, data.frame(functionUsed="varaibleSelection",  runTime=difftime(Sys.time(), t1a, units='secs')))
+            # bioValues <<- redefined if any NA are present in predictor datasets.
+            # variblesToModel <<- a listing of variable names used to modeling
+               
+            t1a <- Sys.time()
+            cat("...perform maxent model\n")
+            runMaxnet(species)
+            time_df <- rbind(time_df, data.frame(functionUsed="runMaxnet",  runTime=difftime(Sys.time(), t1a, units='secs')))
+            # sdm_results <<- output of the Maxnet modeling process
+            
+            if(!file.exists(paste0(sp_dir, "/sdm.rds"))){
+            print("the model did not successfully run")
+              }else{
+              
+              t1a <- Sys.time()
+              evaluate_sdm_function(species)
+              time_df <- rbind(time_df, data.frame(functionUsed="evaluate_sdm_function",  runTime=difftime(Sys.time(), t1a, units='secs')))
+              ## thrshold <<- threshold raster
+              
+              if(length(unique(values(thrshold)))==2){
+              print("the model did not successfully run")
+                }else{
+                
+                t1a <- Sys.time()
+                cat("...create a mess map based on top predictor \n")
+                messMap(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="messMap",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                
+                t1a <- Sys.time()
+                cat("...create a kernal density map of the sample points  \n")
+                kernalDensity(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="kernalDensity",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                  
+                ### start of the gap analysis metrics.
+                t1a <- Sys.time()
+                cat("...conducting GRSex assessment\n")
+                grs_exsitu(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="grs_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                
+                t1a <- Sys.time()
+                cat("...conducting ERSex assessment\n")
+                ers_exsitu(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="ers_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                                    
+                t1a <- Sys.time()
+                cat("...conducting  fcsex assessment\n")
+                fcs_exsitu(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="fcs_exsitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                                    
+                cat("...Ex situ assessment is complete\n")
+                
+                t1a <- Sys.time()
+                cat("...conducting srs In assessment\n")
+                srs_insitu(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="srs_insitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                
+                t1a <- Sys.time()
+                cat("...conducting grs In assessment\n")
+                insitu_grs(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="insitu_grs",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                
+                t1a <- Sys.time()
+                cat("...conducting ers In assessment\n")
+                ers_insitu(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="ers_insitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                
+                t1a <- Sys.time()
+                cat("...conducting fcs In assessment\n")
+                fcs_insitu(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="fcs_insitu",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                
+                cat("...in situ assessment is complete\n")
+                
+                t1a <- Sys.time()
+                cat("...conducting fcs combined assessment\n")
+                fcs_combine(species)
+                time_df <- rbind(time_df, data.frame(functionUsed="fcs_combine",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                                   
+                t1a <- Sys.time()
+                rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/singleSpeciesSummary.rmd"),
+                                      output_file =  paste("report_", species, '_', run_version,'_' , Sys.Date(), ".html", sep=''),
+                                      output_dir = paste0(gap_dir,"/", genus,"/summaryDocs"))
+                
+                time_df <- rbind(time_df, data.frame(functionUsed="sinlge species Summary",  runTime=difftime(Sys.time(), t1a, units='secs')))
+                time_df$Minutes <- time_df$runTime/60
+                write.csv(x = time_df, file = paste0(sp_dir, "/time_df.csv"))
+                print(paste0("the process for ", species, " has ended."))
+                
+                
+                # remove all global variables that are specific to the species
+                try(globalVars <- c(xyData, cleanPoints, sp_dir,rawData,dataThin, nativeArea, spPoint,pa_spp,
+                                    ecoValsAllPointsLen,pa_spp_area, gBufferRas1, gBufferRas_area,
+                                    sp_counts,bioValues,sdm,evaluate_table,sdm_results, thrshold,
+                                    evaluate_table_f, crossValDir,rastersToModel, data_train, bioValues,
+                                    variblesToModel,species))
+                
+                try(rm(globalVars))
+                beepr::beep(1)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 
 
-D:/cwrNA/src/modeling/alternative/gBuffer.R 
+
+D:/cwrNA/src/modeling/alternative/create_buffers.r 
 
 ###
-# buffer all g points and clip to native area 
+# buffer all g points and clip to native area
+# dan.carver@carverd.com
+# 20200414
+###
 
 create_buffers <- function(species){
-    ## select all g points from point object 
-    p1 <- subset(cleanPoints, type == "G") # select all g pointsd
+    ## select all g points from point object
+    p1 <- subset(cleanPoints, type == "G")
+    # ensure matching CRS
     raster::crs(p1) <- raster::crs(nativeArea)
-    
+
+    #clause to test for G occurrences
     if(nrow(p1@data)== 0){
-      print("there are no g points for this species")      
+      print("there are no g points for this species")
     }else{
     ##buffering
-    buffer <- geobuffer_pts(xy = p1, 
-                              dist_m = bufferDist, 
+    buffer <- geobuffer_pts(xy = p1,
+                              dist_m = bufferDist,
                               output = 'sf')
-    # set extent equal to native area 
+    # set extent equal to native area
     rasters1 <- bioVars$as.RasterStack() %>%
       raster::crop(nativeArea) %>%
       raster::mask(nativeArea)
-    
-    ##rasterizing and making it into a mask
+
+    ##rasterizing and matching cells to predictor layers
     buffer_rs <- fasterize::fasterize(buffer, rasters1$layer.1)
 
-    # mask buffer to native area 
+    # mask buffer to native area
     maskBuff <- raster::crop(x = buffer_rs, y = nativeArea) %>%
       raster::mask(nativeArea)
-    
+
     ##writing raster
     writeRaster(maskBuff, paste0(sp_dir,"/modeling/alternatives/ga50.tif	"),overwrite=TRUE)
-
   }
 }
+D:/cwrNA/src/modeling/maxnet/evaluate_function.r 
 
-D:/cwrNA/src/modeling/maxnet/backgroundGen.R 
-
-### 
-# generate background points based on the size of the native area 
-# 20190904
-# carver.dan1@gmail.com
-### 
-generateModelingData <- function(species){
-  #function for checking area
-  numberBackground <- function(area){
-    n <- rgeos::gArea(area)*58
-    if( n >= 5000){
-      n <- 5000}else{
-        n <- n
-      }
-    return(n)
-  }
-  n <- numberBackground(nativeArea)
-  
-  # produce background points based on native area area
-  bck_data <- spsample(nativeArea, n = n, type = "random" )
-  crs(bck_data) <- crs(nativeArea)
-  print(1)
-  # test so that background points do not overlap with presence points 
-  # create the point buffer
-  # 1. buffer values from known presece locations by 0.000556 
-  presBuff <- rgeos::gBuffer(sp::SpatialPoints(cleanPoints@coords), width=0.000556) #width=0.000556
-  crs(presBuff) <- crs(nativeArea)
-  # convert to spatial dataframe 
-  print(2)
-  # 2. run an intersect between buffer and background point
-  intersect <- data.frame(over(bck_data, presBuff))
-  
-  if(length(unique(intersect$over.bck_data..presBuff.))>1){
-    nbd <- as.data.frame(bck_data@coords)
-    nbd$intesect <- intersect
-    nbd <- nbd %>% 
-      filter(is.na(intersect))
-    bck_data <- sp::SpatialPoints(coords = c(nbd[,1:2]))
-    crs(bck_data) <- crs(nativeArea)
-  }
-  print(3)
-  # 3. extract all values to background points 
-  rasterStack <- bioVars$as.RasterStack() %>% 
-    raster::crop(nativeArea)
-  bck_vals <- raster::extract(x = rasterStack,y = bck_data)
-  bck_data_bio <-as.data.frame(cbind(bck_data@coords, bck_vals))%>%
-    mutate(presence = 0)
-  bck_data_bio$longitude <- bck_data_bio$x
-  bck_data_bio$latitude <- bck_data_bio$y
-  bck_data_bio <- bck_data_bio %>% dplyr::select(-c("x","y"))
-  print(4)
-  # extract values to presence points 
-  prs_vals <- raster::extract(x = rasterStack,y = sp::SpatialPoints(cleanPoints@coords))
-  print(4.1)
-  prs_data_bio <- as.data.frame(cbind(prs_vals,cleanPoints@data[,2:3])) %>%
-    mutate(presence = 1)
-  print(5)
-  # merge presence and background sets 
-  bioValues <<- dplyr::bind_rows(bck_data_bio,prs_data_bio)
-  
-  # need to find a list of the layer names for the raster and apply them before declaring this global
-  # variable and writing out the data. 
-  
-  # write out csv of background/presence data
-  write.csv(x = bioValues, file = paste0(sp_dir, "/occurrences/presBackgroundWithBiovars.csv"))
-}
-D:/cwrNA/src/modeling/maxnet/evaluateFunction.R 
-
-
-
+###
+# runs statistics on the predictive capability of the median model
+# Based on work by the CIAT group
+# dan.carver@carverd.com
+# 20200414
+###
 
 evaluate_function <- function(species){
 
   ###ASD15
   esdCpt <- raster(paste0(sp_dir, "/modeling/",species,"_prj_std.tif"))
   dumm <- raster(paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"))
-  
+
   esdCpt[which(dumm[] < 0.001)] <- NA
-  
+
   #create 0,1 raster with areas below 0.15 STD (below=1, above=0)
   esdCpt_ref <- esdCpt
   esdCpt_ref[which(!is.na(esdCpt[]))] <- 1
-  
+
   #create 0,1 raster with areas above 0.15 STD (below=0, above=1)
   esdCpt_a15 <- esdCpt
   esdCpt_a15[which(esdCpt[] >= 0.15)] <- 1
   esdCpt_a15[which(esdCpt[] < 0.15)] <- 0
-  
+
   #make a raster of area
   dist_area <- area(esdCpt)
-  
+
   #calculate size of distribution within native area, and within thresholded distribution
   #total, and above 0.15 STD.
   szCpt <- dist_area * esdCpt_ref
   szCptUncertain <- dist_area * esdCpt_a15
   rateCpt <- sum(szCptUncertain[],na.rm=T) / sum(szCpt[],na.rm=T) * 100
-  
+
   #############################
   rm(dumm,esdCpt);gc()
   #############################
-  
+
   evaluate_table_f <- data.frame(matrix(nrow = 1,ncol = 16))
   evaluate_table_f[1,] <- colMeans(evaluate_table[,-10],na.rm = T)
   colnames(evaluate_table_f) <- names(colMeans(evaluate_table[,-10],na.rm = T))
@@ -3390,7 +3123,7 @@ evaluate_function <- function(species){
   evaluate_table_f[,"species"]<- as.character(species)
   evaluate_table_f[,"STAUC"]<- as.numeric(sd(evaluate_table$AUCtrain,na.rm = T))
   colnames(evaluate_table_f)[1] <- "ATAUC"
-  
+
   ####ASD15
   evaluate_table_f$ASD15 <- NA
   if(is.na(rateCpt)){
@@ -3398,41 +3131,42 @@ evaluate_function <- function(species){
   } else {
     evaluate_table_f$ASD15 <- rateCpt
   }
-  
+
   if (evaluate_table_f$ATAUC >=0.7 &
       evaluate_table_f$STAUC <0.15 &
       evaluate_table_f$ASD15 <=10 &
       evaluate_table_f$cAUC >=0.4
   ) {
-    evaluate_table_f$VALID  <-TRUE 
+    evaluate_table_f$VALID  <-TRUE
   } else {
-    evaluate_table_f$VALID  <-FALSE 
+    evaluate_table_f$VALID  <-FALSE
   }
-  
+
   #write output table
   write.csv(evaluate_table_f,paste0(crossValDir,"/","eval_metrics.csv"),quote = F,row.names = F)
-  
-  #return
-  return(evaluate_table_f)
 }
+D:/cwrNA/src/modeling/maxnet/evaluate_sdm_function.r 
 
-
-D:/cwrNA/src/modeling/maxnet/evaluateSDM.R 
-
-
+###
+# generates the median threshold raster. Calls evaluateFunction to access the
+# statistics on the median threshold model.
+# Based on work by the CIAT group
+# dan.carver@carverd.com
+# 20200414
+###
 
 evaluate_sdm_function <- function(species){
-    
+
     if(file.exists(paste0(sp_dir,"/","sdm.rds"))){
-      
+
       cat("Loading sdm results!", "\n")
-      
+
       sdm <<- readRDS(paste0(sp_dir,"/","sdm.rds"))
       # Extracting metrics for 5 replicates
       cat("Gathering replicate metrics  for: ", species, "\n")
       evaluate_table <<- metrics_function(species)
       #evaluate_table<-read.csv(paste0(sp_dir,"/","eval_metrics_rep.csv"),header=T)
-      
+
       # Apply threshold from evaluation
       cat("Thresholding using Max metrics  for: ", species, "\n")
       # thrsld <- as.numeric(mean(evaluate_table[,"Threshold"],na.rm=T))
@@ -3451,52 +3185,29 @@ evaluate_sdm_function <- function(species){
         # Gathering final evaluation table
         evaluate_table_f <<- evaluate_function(species)
         #return(cat("Process finished successfully for specie:", species, "\n"))
-        
+
       } else { #if(base::nrow(cleanPoints)<10 & base::nrow(cleanPoints)>0  ) {
         cat("Species:", species, "only has", nrow(cleanPoints), "coordinates, it is not appropriate for modeling\n")
-        # sp_dir <-  paste0(gap_dir, "/", species, "/", run_version,"/","modeling/maxent")
-        # evaluate_table <- data.frame(species=species,training=NA,testing=NA,ATAUC=NA,STAUC=NA,
-        #                              Threshold=NA,Sensitivity=NA,Specificity=NA,TSS=NA,PCC=NA,
-        #                              nAUC=NA,cAUC=NA,ASD15=NA,VALID=FALSE)
+
         evaluate_table_f <- data.frame(ATAUC=NA,AUCtest=NA,nAUC=NA,cAUC=NA,sensi_train=NA,speci_train=NA,threshold_train=NA,
                                        max.TSS_train=NA,minROCdist_train=NA,threshold_test=NA,sensi_test=NA,speci_test=NA,matthews.cor_test=NA,
                                        LR_pos_test=NA,LR_neg_test=NA,kappa_index_test=NA,species=NA,STAUC=NA,ASD15=NA,VALID=NA)
-        
+
         evaluate_table_f[,"VALID"] <- FALSE
         evaluate_table_f[,"species"] <- species
         write.csv(evaluate_table_f, paste0(sp_dir,"/","eval_metrics.csv"),row.names=F,quote=F)
-        
-        # } else {
-        #   cat("Species:", species, "has no data with coordinates, and cannot be modeled\n")
-        #   # sp_dir <-  paste0(gap_dir, "/", species, "/", run_version,"/","modeling/maxent")
-        #   # evaluate_table <- data.frame(species=species,training=NA,testing=NA,ATAUC=NA,STAUC=NA,
-        #   #                              Threshold=NA,Sensitivity=NA,Specificity=NA,TSS=NA,PCC=NA,
-        #   #                              nAUC=NA,cAUC=NA,ASD15=NA,VALID=FALSE)
-        #   # evaluate_table <- write.csv(evaluate_table, paste0(sp_dir,"/","eval_metrics.csv"),row.names=F,quote=F)
-        #   evaluate_table_f <- data_frame(ATAUC=NA,AUCtest=NA,nAUC=NA,cAUC=NA,sensi_train=NA,speci_train=NA,threshold_train=NA,
-        #                                  max.TSS_train=NA,minROCdist_train=NA,threshold_test=NA,sensi_test=NA,speci_test=NA,matthews.cor_test=NA,
-        #                                  LR_pos_test=NA,LR_neg_tes=NAt,kappa_index_test=NA,species=NA,STAUC=NA,ASD15=NA,VALID=NA)
-        #   
-        #   evaluate_table_f[,"VALID"] <- FALSE
-        #   evaluate_table_f[,"species"] <- species
-        # #   write.csv(evaluate_table_f, paste0(sp_dir,"/","eval_metrics.csv"),row.names=F,quote=F)
-        # #   
-        # #   
-        # #   }
-      } 
+
+      }
     }else {   cat(paste(species," not modelled yet"),"\n")
-      
+
       if(nrow(cleanPoints)<3){
-        
+
         cat("Species:", species, "only has", nrow(cleanPoints), "coordinates, it is not appropriate for modeling\n")
-        # sp_dir <-  paste0(gap_dir, "/", species, "/", run_version,"/","modeling/maxent")
-        # evaluate_table <- data.frame(species=species,training=NA,testing=NA,ATAUC=NA,STAUC=NA,
-        #                              Threshold=NA,Sensitivity=NA,Specificity=NA,TSS=NA,PCC=NA,
-        #                              nAUC=NA,cAUC=NA,ASD15=NA,VALID=FALSE)
+
         evaluate_table_f <- data.frame(ATAUC=NA,AUCtest=NA,nAUC=NA,cAUC=NA,sensi_train=NA,speci_train=NA,threshold_train=NA,
                                        max.TSS_train=NA,minROCdist_train=NA,threshold_test=NA,sensi_test=NA,speci_test=NA,matthews.cor_test=NA,
                                        LR_pos_test=NA,LR_neg_test=NA,kappa_index_test=NA,species=NA,STAUC=NA,ASD15=NA,VALID=NA)
-        
+
         evaluate_table_f[,"VALID"] <- FALSE
         evaluate_table_f[,"species"] <- species
         write.csv(evaluate_table_f, paste0(sp_dir,"/","eval_metrics.csv"),row.names=F,quote=F)
@@ -3507,75 +3218,151 @@ evaluate_sdm_function <- function(species){
 
   return(species)
 }
+D:/cwrNA/src/modeling/maxnet/generateModelingData.r 
+
+###
+# generate background points based on the size of the native area
+# 20190904
+# dan.carver@carverd.com
+###
+
+generateModelingData <- function(species){
+  #function for checking area
+  numberBackground <- function(area){
+    n <- rgeos::gArea(area)*58
+    if( n >= 5000){
+      n <- 5000}else{
+        n <- n
+      }
+    return(n)
+  }
+  n <- numberBackground(nativeArea)
+
+  # produce background points based on native area area
+  bck_data <- spsample(nativeArea, n = n, type = "random" )
+  crs(bck_data) <- crs(nativeArea)
+  print(1)
+  # test so that background points do not overlap with presence points
+  # create the point buffer
+  # 1. buffer values from known presece locations by 0.000556
+  presBuff <- rgeos::gBuffer(sp::SpatialPoints(cleanPoints@coords), width=0.000556) #width=0.000556
+  crs(presBuff) <- crs(nativeArea)
+  # convert to spatial dataframe
+  print(2)
+  # 2. run an intersect between buffer and background point
+  intersect <- data.frame(over(bck_data, presBuff))
+
+  if(length(unique(intersect$over.bck_data..presBuff.))>1){
+    nbd <- as.data.frame(bck_data@coords)
+    nbd$intesect <- intersect
+    nbd <- nbd %>%
+      filter(is.na(intersect))
+    bck_data <- sp::SpatialPoints(coords = c(nbd[,1:2]))
+    crs(bck_data) <- crs(nativeArea)
+  }
+  print(3)
+  # 3. extract all values to background points
+  rasterStack <- bioVars$as.RasterStack() %>%
+    raster::crop(nativeArea)
+  bck_vals <- raster::extract(x = rasterStack,y = bck_data)
+  bck_data_bio <-as.data.frame(cbind(bck_data@coords, bck_vals))%>%
+    mutate(presence = 0)
+  bck_data_bio$longitude <- bck_data_bio$x
+  bck_data_bio$latitude <- bck_data_bio$y
+  bck_data_bio <- bck_data_bio %>% dplyr::select(-c("x","y"))
+  print(4)
+  # extract values to presence points
+  prs_vals <- raster::extract(x = rasterStack,y = sp::SpatialPoints(cleanPoints@coords))
+  print(4.1)
+  prs_data_bio <- as.data.frame(cbind(prs_vals,cleanPoints@data[,2:3])) %>%
+    mutate(presence = 1)
+  print(5)
+  # merge presence and background sets
+  bioValues <<- dplyr::bind_rows(bck_data_bio,prs_data_bio)
+
+  # write out csv of background/presence data
+  write.csv(x = bioValues, file = paste0(sp_dir, "/occurrences/presBackgroundWithBiovars.csv"))
+}
 D:/cwrNA/src/modeling/maxnet/kernalDensity.R 
 
 ###
-# Function to generate a kernal density map of the occurence data for CWR NA. For not this is just a visualization 
-# tool for understanding the potential spatial biasing in the points. I want to be able to high light areas of high sampling
-# density and areas of low density. A possible extension of this it attempting to smooth the varability acroos the area, 
-# by adjusting the number of points in a region, though that will be a complicated process. 
-# 20200125
+# Function to generate a kernal density map of the occurence data for CWR NA.
+# This is a visualization tool that will help in understanding the potential
+# spatial biasing in the occurrence dataset. I want to be able to highlight
+# areas of high sampling density and areas of low density. A possible extension
+# of this it attempting to smooth the varability acroos the area,
+# by adjusting the number of points in a region, though that will be a
+# complicated process.
+# 20200414
 # dan.carver@carverd.com
 ###
 
 kernalDensity <- function(species){
-  # so both cleanPoints and thrshold are both global objects so I should need to call them 
+  # so both cleanPoints and thrshold are both global objects so I should need to call them
   k2 <- spatialEco::sp.kde(x = cleanPoints, newdata = thrshold, standardize = TRUE)
   raster::writeRaster(x = k2, filename = paste0(sp_dir, "/modeling/kernalDensity.tif"),overwrite=TRUE)
 
-  } 
-
+  # potential work flow for test idea
+  # extract kernal values back to cleanPoints
+  # filter out a portion of the points with high kernal density
+  # re run KDE
+  # repeat until a range the distribution of the kernal density values reachs
+  # a specific level of normal? or some other metric(range of KDE values)
+  # rerun the modeling methodology and compare outputs 
+  }
 D:/cwrNA/src/modeling/maxnet/messMap.R 
 
 ###
-# attempt at the MESS Map : filtered model extent by range of top predictor 
-# 20191016
-# carver.dan1@gmail.com 
+# MESS Map : filtered model extent by range of top predictor
+# 20200414
+# dan.carver@carverd.com
 ###
 
 messMap <- function(species) {
   # Load in top predictors 
   topPre <- read.csv(file = paste0(sp_dir,"/modeling/maxent/predictorImportance.csv" ))
-  
-  # load in bioValuesFor Predictors 
+
+  # load in bioValuesFor Predictors
   bioValue2 <- read.csv(file = paste0(sp_dir,"/modeling/maxent/bioValuesForPresencePoints.csv" ))%>%
     dplyr::filter(presence == 1)
-  
-  # use top predictor to select raster layer and clip that to native area 
+
+  # use top predictor to select raster layer and clip that to native area
   top1 <- as.character(topPre$varNames[1])
-  
-  # determine range +/- 1% of top predictor 
+
+  # determine range +/- 1% of top predictor
   vals1 <- dplyr::select(bioValue2, top1)
   r1 <- range(vals1)
-  #diff <- (r1[2] - r1[1])*0.01 # 20191031, dropping the buffer section for now. 
+  #diff <- (r1[2] - r1[1])*0.01 # 20191031, dropping the buffer section for now.
   h1 <- r1[2] #+ diff
-  b1 <- r1[1] #- diff 
-  
-  # load in raster for top predictor 
+  b1 <- r1[1] #- diff
+
+  # load in raster for top predictor
   topRast <- rastersToModel%>%
     raster::subset(top1)
-    
-  
-  # write a clause statement that test identifies all areas within that range of native range masked 
+
+
+  # write a clause statement that test identifies all areas within that range of native range masked
   topRast[topRast > h1] <- 0
   topRast[topRast < b1] <- 0
   topRast[topRast > 0] <- 1
-  # use the newly created raster to mask out the the threshold model. Output will be presented in the htmls 
+  # use the newly created raster to mask out the the threshold model. Output will be presented in the htmls
   thrshold <<- raster::raster(paste0(sp_dir, "/modeling/spdist_thrsld_median.tif"))
   thrshold[thrshold == 0] <- NA
   messMap <- thrshold * topRast
   joinMEss <- thrshold + messMap
   raster::writeRaster(x = messMap, filename = paste0(sp_dir, "/modeling/messMapThres.tif"),overwrite=TRUE)
 }
-
-
-
 D:/cwrNA/src/modeling/maxnet/metricsFuction.R 
 
-
+###
+# compiles individual model run data
+# built on content from CIAT group
+# dan.carver@carver.com
+# 20200414
+###
 
 metrics_function<-function(species){
-  
+
   evaluate_table <- data.frame(
     AUCtrain = do.call(rbind,sdm$AUC_train),
     AUCtest = do.call(rbind,sdm$AUC),
@@ -3584,83 +3371,71 @@ metrics_function<-function(species){
   )
   atrain <- do.call(rbind,sdm$evaluation_train)
   colnames(atrain) <- paste0(colnames(atrain),"_","train")
-  
+
   atest <- do.call(rbind,sdm$evaluation_test)
   colnames(atest) <- paste0(colnames(atest),"_","test")
-  
+
   evaluate_table <- cbind(evaluate_table,atrain)
   evaluate_table <- cbind(evaluate_table,atest)
-  
+
   crossValDir <<- paste0(sp_dir, "/modeling/maxent")
   write.csv(evaluate_table,paste0(crossValDir,"/","eval_metrics_rep.csv"),quote = F,row.names = F)
-  
+
   return(evaluate_table)
 }
-
-
 D:/cwrNA/src/modeling/maxnet/runMaxnet.R 
 
 ###
-# run  maxnet, include validations and projections to rasters 
-# based on work by CIAT group 
-# 20190904
-# carver.dan1@gmail.com
+# run  maxnet, include validations and projections to rasters
+# based on work by CIAT group
+# 20200414
+# dan.carver@carverd.com
 ###
 
-#species <- species1
-
-# run maxnet multiple times 
-
 runMaxnet <- function(species){
-    tryCatch(
-      # This is what I want to do...
-      {
-        # pull out presence points 
+    tryCatch({
+        # pull out presence points
         nPresence <- bioValues %>%
           filter(presence == 1) %>% nrow()
-        
+
         if(nPresence <= 8 & nPresence >3){
              kfold <- 3
              feat <- "lp"
         }
         if(nPresence > 8 & nPresence <= 25){
-          kfold <- 3
+          kfold <- 6
           feat <- "lqph"
         }
         if(nPresence > 25){
           kfold <- 10
           feat <- "lqph"
         }
-          
-          
-          # select needed raster bands 
+
+
+          # select needed raster bands
           rastersToModel <<- bioVars$as.RasterStack() %>%
             raster::subset(names(variblesToModel))%>%
             raster::crop(nativeArea)%>%
             raster::mask(nativeArea)
-
-          ##
-          # for testing 
-          #kfold <- 3
-
-          bioValuesModel <- bioValues[complete.cases(bioValues),] %>% 
+          # develop modeling data
+          bioValuesModel <- bioValues[complete.cases(bioValues),] %>%
             dplyr::select(names(variblesToModel)) %>%
             dplyr::mutate(presence = bioValues$presence, latitude = bioValues$latitude, longitude = bioValues$longitude)
-          
+
           ####
-          # I'm wrapping the modeling steps into a function because there are species which 
+          # I'm wrapping the modeling steps into a function because there are species which
           # can not be models via all reps because when the data is spilts, specific groups
-          # do not have any presences points. If you re run the cvfolds process, you get new 
-          # groups of data, this sometimes produces splits in the data that allow for the 
-          # process to run, hence we get a successful model. 
+          # do not have any presences points. If you re run the cvfolds process, you get new
+          # groups of data, this sometimes produces splits in the data that allow for the
+          # process to run, hence we get a successful model.
           modelsteps <- function(){
-            # run model within here 
-            cvfolds <- modelr::crossv_kfold(bioValuesModel,k = kfold) 
-            #### 20200127, trying to get a consistent test train split. I will try running the 
-            # models with this method and see what happen. 
-            
-            ### 20200128, not going to work out until i figure out how to index 
-            # ## Create a dataframe that records the number of test and train 
+            # run model within here
+            cvfolds <- modelr::crossv_kfold(bioValuesModel,k = kfold)
+            #### 20200127, trying to get a consistent test train split. I will try running the
+            # models with this method and see what happen.
+
+            ### 20200128, not going to work out until i figure out how to index
+            # ## Create a dataframe that records the number of test and train
             # paCount <- data.frame(matrix(nrow = kfold, ncol = 5))
             # colnames(paCount) <- c("modelRun", "presenceTrain",
             #                        "backgroundTrain", "presenceTest","backgroundTest")
@@ -3671,38 +3446,15 @@ runMaxnet <- function(species){
             #   paCount$presenceTest[i] <- length(which(cvfolds$test[i]$data$presence == 1))
             #   paCount$backgroundTest[i] <- length(which(cvfolds$test[i]data$presence == 1))
             # }
-            # 
+            #
             sdm_results <- cvfolds %>% dplyr::mutate(.
-                                                      #train 5 sdm models using Maxnet and train data
+                                                      #train sdm models using Maxnet and train data
                                                       ,model_train = purrr::map2(.x = train, .y = .id, function(.x, .y){
-                                                        
-                                                        
-                                                        
-                                                        # cat("Training MAXNET model for fold", fold, ", all presence points added to background \n")
-                                                        # 
-                                                        # data_train <- as.data.frame(sp_data) #passport data
-                                                        # 
-                                                        # #adding all presence points to background
-                                                        # pres_to_bg <- data_train[which(data_train[, 1] == 1), ]
-                                                        # pres_to_bg[,1] <- rep(0, length(pres_to_bg [, 1]))
-                                                        # 
-                                                        # p <- c(data_train[, 1], pres_to_bg[,1])#adding all presence points to background
-                                                        # data <- rbind(data_train[, -c(1,2,3)], pres_to_bg[, -c(1,2,3)])#adding all presence points to background
-                                                        # 
-                                                        # fit.maxent <- maxnet::maxnet(p       = p,
-                                                        #                              data    = data,
-                                                        #                              regmult = beta,
-                                                        #                              f       = maxnet.formula(p, data, classes = paste0(substr(feat, start = 1, stop = 1), collapse = "")))
-                                                        # 
-                                                        # 
-                                                        # 
-                                                        # 
-                                                        
-                                                        
+
                                                         cat("Training MAXNET model for fold", .y, ", all presence points added to background \n")
-                                                        
-                                                        data_train <<- as.data.frame(.x) 
-                                                        #select all presence and add them as background as well. 
+
+                                                        data_train <<- as.data.frame(.x)
+                                                        #select all presence and add them as background as well.
                                                         pres <- data_train%>% filter(presence == 1)
                                                         pres$presence <- rep(0, length(pres$presence))
                                                         data_train <- rbind(data_train, pres)
@@ -3713,11 +3465,11 @@ runMaxnet <- function(species){
                                                                                      data    = data,
                                                                                      #regmult = beta,
                                                                                      f       = maxnet.formula(p, data, classes = feat))
-                                                        
+
                                                         return(fit.maxent)
-                                                        
+
                                                       })
-                                                      
+
                                                       #evaluate trained model
                                                       , predictions_train = purrr::pmap(list(.x = model_train, .y = .id, .z = train), function(.x, .y, .z){
                                                         cat("Predicting train data for fold", .y, "\n")
@@ -3726,70 +3478,70 @@ runMaxnet <- function(species){
                                                                                        newdata = train%>% dplyr::select(names(variblesToModel)),
                                                                                        type = "logistic")
                                                         dt <-  data.frame(obs = factor(train$presence), pred = predictions)
-                                                        
-                                                        
+
+
                                                         return(dt)
                                                       })
                                                       #calculate auc for trained model
                                                       ,AUC_train = purrr::map2(.x = predictions_train, .y = .id, function(.x, .y){
                                                         cat("Calculating AUC_train for model", .y,"\n")
                                                         croc <- pROC::roc(response = .x$obs, predictor = .x$pred)
-                                                        
+
                                                         return(as.numeric(croc$auc))
                                                       })
                                                       #calculate max preformance measures (sensitivity, specificity and Treshold) using train data
                                                       ,evaluation_train = purrr::map2(.x = predictions_train, .y = .id, function(.x, .y){
-                                                        
+
                                                         cat("Calculating optimal threshold for model", .y, "\n")
                                                         croc <- pROC::roc(response = .x$obs, predictor = .x$pred)
-                                                        croc_summ <- data.frame (sensi = croc$sensitivities, speci = croc$specificities, threshold =  croc$thresholds) %>% 
-                                                          round(., 3) %>% 
-                                                          dplyr::mutate(., max.TSS = sensi + speci - 1) %>% 
+                                                        croc_summ <- data.frame (sensi = croc$sensitivities, speci = croc$specificities, threshold =  croc$thresholds) %>%
+                                                          round(., 3) %>%
+                                                          dplyr::mutate(., max.TSS = sensi + speci - 1) %>%
                                                           dplyr::mutate(., minROCdist = sqrt((1- sensi)^2 + (speci -1)^2))
-                                                        
-                                                        max.tss <- croc_summ %>% dplyr::filter(., max.TSS == max(max.TSS)) %>% 
+
+                                                        max.tss <- croc_summ %>% dplyr::filter(., max.TSS == max(max.TSS)) %>%
                                                           dplyr::mutate(., method = rep("max(TSS)", nrow(.)))
-                                                        
-                                                        minRoc <- croc_summ %>% 
-                                                          dplyr::filter(., minROCdist == min(minROCdist))%>% 
+
+                                                        minRoc <- croc_summ %>%
+                                                          dplyr::filter(., minROCdist == min(minROCdist))%>%
                                                           dplyr::mutate(., method = rep("minROCdist", nrow(.)))
-                                                        
-                                                        croc_summ <- rbind(max.tss, minRoc) %>% 
-                                                          dplyr::filter(., speci == max(speci))  %>% 
+
+                                                        croc_summ <- rbind(max.tss, minRoc) %>%
+                                                          dplyr::filter(., speci == max(speci))  %>%
                                                           dplyr::sample_n(., 1)
-                                                        
+
                                                         return(croc_summ)
                                                       })
                                                       #Make predictions using testing data
                                                       , predictions_test = purrr::pmap(list(.x = test, .y = model_train, .z = .id), function(.x, .y, .z){
-                                                        
+
                                                         cat("Using test data to predict model", .z," \n")
                                                         test <- as.data.frame(.x)
                                                         predictions <- raster::predict(object = .y,
                                                                                        newdata = test%>% dplyr::select(names(variblesToModel)),
                                                                                        type = "logistic")
                                                         dt <-  data.frame(obs = factor(test$presence), pred = predictions)
-                                                        
+
                                                         return(dt )
                                                       })
-                                                      #Calculate AUC for testing 
+                                                      #Calculate AUC for testing
                                                       , AUC = map2(.x = predictions_test, .y = .id, function(.x, .y){
                                                         cat("Calculating AUC for model", .y,"\n")
                                                         croc <- pROC::roc(response = .x$obs, predictor = .x$pred)
-                                                        
+
                                                         return(as.numeric(croc$auc))
                                                       })
                                                       #calculate max preformance measures (sensitivity, specificity and Treshold) using max(TSS) criterion
                                                       , evaluation_test = pmap(list(.x = evaluation_train, .y = .id, .z = predictions_test), function(.x, .y, .z){
                                                         cat("Calculating evaluation for model", .y,"\n")
-                                                        
+
                                                         thr <- .x$threshold
-                                                        
+
                                                         a <- .z %>% dplyr::filter(., pred >= thr & obs == 1) %>% nrow()
                                                         b <- .z %>% dplyr::filter(., pred >= thr & obs == 0) %>% nrow()
                                                         c <- .z %>% dplyr::filter(., pred < thr & obs == 1) %>% nrow()
                                                         d <- .z %>% dplyr::filter(., pred < thr & obs == 0) %>% nrow()
-                                                        
+
                                                         #senitivity and specificity
                                                         se <- a/(a+c)
                                                         es <- d/(b+d)
@@ -3801,30 +3553,30 @@ runMaxnet <- function(species){
                                                         lr_ps <- se/(1 - es)
                                                         #Likelihood ratio -
                                                         lr_ne <- (1 - se)/es
-                                                        
+
                                                         #calculate kappa index
                                                         pr_a <- (a+d)/(a+b+c+d)
-                                                        pr_e <- (((a+b)/(a+b+c+d))* ((a+c)/(a+b+c+d))) + ( ((c+d)/(a+b+c+d) )* ((b+d)/(a+b+c+d) )) 
-                                                        kappa <- (pr_a - pr_e)/(1 - pr_e) 
-                                                        
-                                                        
+                                                        pr_e <- (((a+b)/(a+b+c+d))* ((a+c)/(a+b+c+d))) + ( ((c+d)/(a+b+c+d) )* ((b+d)/(a+b+c+d) ))
+                                                        kappa <- (pr_a - pr_e)/(1 - pr_e)
+
+
                                                         evaluation <- data.frame(threshold= thr, sensi = se, speci = es, matthews.cor = mcc, LR_pos = lr_ps, LR_neg = lr_ne, kappa_index = kappa)
                                                         return(evaluation)
                                                       })
                                                       #Calculate nAUC using both train and test data
                                                       , nAUC = pmap(list(.x = train, .y = test, .z = .id), function(.x, .y, .z){
                                                         cat("calculating AUC from NULL model", .z,"\n")
-                                                        
+
                                                         train_dt <- as.data.frame(.x) %>% dplyr::select(., presence, longitude, latitude)
                                                         test_dt  <- as.data.frame(.y) %>% dplyr::select(., presence, longitude, latitude)
-                                                        
-                                                        
+
+
                                                         train_p <- train_dt[which(train_dt$presence == 1), 2:3]
                                                         train_a <- train_dt[which(train_dt$presence == 0), 2:3]
-                                                        
+
                                                         gd <- dismo::geoDist(p = train_p, a = train_a, lonlat=TRUE)
                                                         pred <- dismo::predict(gd, test_dt %>% dplyr::select(longitude, latitude))
-                                                        
+
                                                         nAUC <- pROC::roc(response = test_dt$presence, predictor = pred)
                                                         return(as.numeric(nAUC$auc))
                                                       })
@@ -3836,35 +3588,35 @@ runMaxnet <- function(species){
                                                       })
                                                       #Project rasters using maxnet model for mean, median and sd
                                                       , do.projections =  purrr::pmap(list(.x = model_train, .y = .id, .z = evaluation_train) ,function(.x, .y, .z){
-                                                        
+
                                                         cat(">>> Proyecting MAXNET model", .y,"to a raster object \n")
                                                         r <- raster::predict(rastersToModel, .x, type = "logistic", progress='text')
                                                         writeRaster(r, paste0(sp_dir,"/modeling/replicates/",species,"_prj_rep-", .y,".tif"), format="GTiff", overwrite = TRUE)
-                                                        #thresholding raster 
+                                                        #thresholding raster
                                                         # if(!validation){
-                                                        #   r[which(r[] < .z$threshold)] <- NA 
+                                                        #   r[which(r[] < .z$threshold)] <- NA
                                                         # }
                                                         writeRaster(r, paste(sp_dir,"/modeling/replicates/",species,"_prj_th_rep-", .y,".tif",sep=""), format="GTiff", overwrite = TRUE)
                                                         return(r)
                                                       })
-                                                      
-                                                      
-                                                      
+
+
+
             )#end mutate
             return(sdm_results)
           }
           ## set up while loop to test for itorations and successful run via the creation of
-          # the sdm object. 
+          # the sdm object.
           sdm_results <- NULL
-          attempt <- 1 
+          attempt <- 1
           while(is.null(sdm_results) && attempt <=3){
             attempt <- attempt + 1
-            try( 
+            try(
               sdm_results <- modelsteps()
-              )# end try 
-          }# end while loop 
+              )# end try
+          }# end while loop
           sdm_results <<- sdm_results
-          #calculate  mean, median and sd raster from replicates 
+          #calculate  mean, median and sd raster from replicates
           prj_stk <- sdm_results %>% dplyr::select(., do.projections) %>% unlist() %>% raster::stack() %>% raster::mask(nativeArea)
           cat("Calculating mean, median and sd for replicates \n")
           mean(prj_stk) %>% writeRaster(., paste0(sp_dir,"/modeling/", species, "_prj_mean.tif" ), overwrite = TRUE)
@@ -3873,18 +3625,18 @@ runMaxnet <- function(species){
           cat("Median raster calculated \n")
           raster::calc(prj_stk, fun = function(x) {sd(x)}) %>% writeRaster(., paste0(sp_dir,"/modeling/", species, "_prj_std.tif" ), overwrite = TRUE)
           cat("Sd raster calculated \n")
-          
-          
+
+
           #save all results in an .rds file
           cat("Process Done... Saving results as .rds file in the path", paste0(sp_dir, "/sdm.rds"), " \n")
           saveRDS(sdm_results, paste0(sp_dir, "/sdm.rds"));gc()
-          
+
           cat(" ","\n")
           cat("Maxent model finished and saved","\n")
           cat(" ","\n")
           return(sdm_results)
       }
-      # ... but if an error occurs, tell me what happened: 
+      # ... but if an error occurs, tell me what happened:
       , error=function(error_message) {
         message("This species encountered an error it will be added to a list to evalualte later")
         message("And below is the error message from R:")
@@ -3892,59 +3644,55 @@ runMaxnet <- function(species){
         return(NA)
       }
     )
-  
-  
 }
-#end sdm_maxnet function 
-
-
 D:/cwrNA/src/modeling/maxnet/variableSelection.R 
 
 ###
-# preform a variable selection on the data 
+# preform a variable selection on the data generates input dataset for modeling
+# methods
 # 20190904
-# carver.dan1@gmail.com
-### 
+# dan.carver@carverd.com
+###
+
 varaibleSelection <- function(species){
-  
-  # subset predictor data and presence column 
+  # subset predictor data and presence column
   varSelect <- bioValues %>% dplyr::select(-c(longitude,latitude ))
-  # remove all na from dataframe 
+  # remove all na from dataframe
   test2 <-complete.cases(varSelect)
   varSelect <- varSelect[test2,]
-  # drop all column from bioValues set as well so the same data is used for maxnet modeling. 
+  # drop all column from bioValues set as well so the same data is used for maxnet modeling.
   bioValues <<- bioValues[test2,]
   write.csv(x = bioValues, file = paste0(sp_dir, "/modeling/maxent/bioValuesForPresencePoints.csv"))
-  
-  
+
+
   # # #vsurf
-  # vsurf1 <- VSURF(x=xy_mxe , y=presenceAbsence , ntree = 2000 , parallel = TRUE)
+  ### Considered altering the number of trees, 100 is somewhat low for the
+  # number of predictors used. It was a time concern more then anything.
   vsurfThres <- VSURF_thres(x=bioValues[,1:26] , y=as.factor(bioValues$presence) ,
                             ntree = 100 )
-  
-  
+
   ###
   #correlation matrix
   ###
-  
+
   # define predictor list based on Run
   inputPredictors <- vsurfThres$varselect.thres
-  #
-  # # ordered predictors from our variable selection
+
+  # ordered predictors from our variable selection
   predictors <- varSelect[,c(inputPredictors)]
   # Calculate correlation coefficient matrix
   correlation <-cor(predictors, method="pearson")
   #change self correlation value
-  
+
   # #define the list of top 15 predictors
   varNames <- colnames(correlation)
-  # empty list containing the variables tested 
+  # empty list containing the variables tested
   varsTested <- c()
   #loop through the top 5 predictors to remove correlated varables.
   for( i in 1:5){
     print(varNames[i])
     if(varNames[i] %in% varNames){
-      # add variable to the test list 
+      # add variable to the test list
       varsTested <- c(varsTested, varNames[i])
       # Test for correlations with predictors
       vars <- correlation[(i+1):nrow(correlation),i] > 0.7 | correlation[(i+1):nrow(correlation),i] < -0.7
@@ -3953,44 +3701,41 @@ varaibleSelection <- function(species){
       #test is any correlated variables exist
       if(length(corVar) >0 ){
         # loop through the list of correlated variables
-        varNames <- varNames[!varNames  %in% corVar] 
+        varNames <- varNames[!varNames  %in% corVar]
         print(paste0("the variable ", corVar, " was removed"))
       }
     }else{
       print("this variable has been removed already")
     }
   }
-  
-  # include all variables that were tested. 
+
+  # include all variables that were tested.
   for(p in varsTested){
     if(p %in% varNames){
     }else{
       varNames <- c(varNames, p)
     }
   }# It's a little bit confusing why variable are being dropped after they area tested. Correlation
-  # should be the same in both directs. This is just a test to make sure it works. 
-  
-  
-  #create a dataframe of the top predictors and 
+  # should be the same in both directs. This is just a test to make sure it works.
+
+
+  #create a dataframe of the top predictors and
   rankPredictors <- data.frame(matrix(nrow = length(colnames(correlation)),ncol = 3))
   rankPredictors$varNames <- colnames(correlation)
   rankPredictors$importance <- vsurfThres$imp.varselect.thres
   rankPredictors$includeInFinal <- colnames(correlation) %in% varNames
   rankPredictors <- rankPredictors[,4:6]
   write.csv(x = rankPredictors, file = paste0(sp_dir, "/modeling/maxent/predictorImportance.csv"))
-  
+
   variblesToModel <<- varSelect[,varNames]
-
 }
-
-
 D:/cwrNA/src/run_lineal.R 
 
 ### 
 # Primary script for running CWRNA. This should be the only location where users have
 # to edit information.
-# 20190830
-# carver.dan1@gmail.com
+# 20200414
+# dan.carver@carverd.com
 ### 
 
 library(tidyverse)
@@ -4038,21 +3783,14 @@ countrySHP <<- readOGR(paste0(par_dir,"/ne_10m_admin/ne_10m_admin_0_countries.sh
 #naSHP <<- readOGR(paste0(par_dir,"/northAmericaArea/northAmericaArea.shp"),verbose = FALSE)
 # include pacific territories 
 naSHP <<- readOGR(paste0(par_dir, "/allUSAArea/NorthAmerica_AllUSA.shp"), verbose = FALSE)
-
-#naSHP@data <- naSHP@data %>% dplyr::select(-c(1:94))# not sure what this is for?? 
 ecoReg <<- readOGR(paste0(par_dir,"/ecoregions/tnc_terr_ecoregions.shp"),verbose = FALSE)
-occData <<- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-04-03.csv",
+occData <- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-04-07.csv",
                               header = TRUE)
+occData <<- occData[,2:ncol(occData)]
 proArea <<- raster::raster(paste0(par_dir, "/protectedAreas/wdpa_reclass.tif"))
 layerDescription <<- read.csv(paste0(par_dir, "/layerDesrciptions.csv"))
 statesData <<- read.csv(paste0(par_dir, "/statePerTaxon/CWRofUSA_nativeareas_2020_1_30.csv"))
 statesSpObject <<- readRDS(paste0(par_dir, "/statesByCountry/gadmCanUsaMex_sp.rds"))
-
-# 20200317 issues with duplicate taxon presenting in different genera. 
-# Split the taxon name and use that to define the genus - species 
-
-occData1 <- occData %>%
-  tidyr::spread(key= )
 
 # Load the sources scripts
 source.files = list.files(repo_dir, ".[rR]$", full.names = TRUE, recursive = T)
@@ -4067,54 +3805,16 @@ source.files = source.files[ !grepl("summaryMarkdown", source.files) ]
 for(i in 1:length(source.files)){
   cat(i,"\n")
   source(source.files[i])
-  
 }
-# set counts csv 
-dfCounts <<- data.frame(matrix(NA, nrow = 1, ncol = 13))
-colnames(dfCounts) <-  c("species","totalRecords",	"hasLat", "hasLong","totalUseful", 	"totalGRecords",
-                         "totalGUseful","totalHRecords",	"totalHUseful","numberOfUniqueSources", 
-                         "NA_occurrences","NA_GUseful" ,"NA_HUseful")
+
+
 # set loop at genus level
 genera <- sort(unique(occData$genus))
 testGen <- genera[1:length(genera)]
-troubleGen <- genera[3:3]
-# Are you testing? Yes or No 
-# if testing all code will run regradless of if the output exists or not. 
-# if false code will test expected output, if that exist it will not run function. 
 
+# optional species list for running specific species from the genera 
+# spList <- c( "Acer saccharum subsp. ozarkense","Vanilla mexicanas")
 
-#create list for error species 
-### 20200206 I should change this out to 
-lowOccurence <- list()
-lowOccurenceAll <- list()
-notModeled <- list()
-notModeledAll <- list()
-fullModelProcess <- list()
-ModeledAll <- list()
-
-
-
-
-### species list for issues on 20200303 
-x2<- allSummary %>%
-  dplyr::filter(is.na(GRS.x)) %>%
-  dplyr::distinct(species) # %>%
-  #filter(species == "Castanea x neglecta")
-spList <- unique(x2$species)[2:nrow(x2)]
-
-
-spList <- as.character(spl3$taxon)
-class(spList)
-  
-
-
-df5 <- data.frame(matrix(nrow = 0, ncol = 4))
-colnames(df5) <-  c(
-  "taxon","varNames","importance","includeInFinal"
-) 
-
-vector <- c()
-n = 1
 # select all species at the genus level and apply master script to run process
 beepr::beep_on_error(
   for(i in genera){
@@ -4138,245 +3838,19 @@ beepr::beep_on_error(
     ### 20200227 here for trouble specific species in spList 
     speciesList <- speciesList[speciesList %in% spList]
     
-    
-    #useful code storing here at the moment 
-    #for(k in speciesList){
-    #   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/modeling/maxent/"),
-    #                       pattern = "predictorImportance.csv",
-    #                       recursive = TRUE, full.names = TRUE)
-    #   if(length(files) == 1){
-    #     t5 <- read.csv(files[1]) %>%
-    #       dplyr::mutate(taxon = k)%>%
-    #       dplyr::select(taxon,varNames,	importance,	includeInFinal)
-    #     df5 <- rbind(df5, t5)
-    #     }
-    #   }
-    # #}
-     
-      #testList <- speciesList[1:1]
-      #species1 <<- "Helianthus angustifolius"
-      #result_master = lapply(testList, master_run)
-      result_master = lapply(speciesList, master_run)
-      # need to include a call for the summary of all features at the genus level
-      # before the loop repeats
-      #dfCounts <<- dfCounts[-1,]
-      #write.csv(dfCounts, file = paste0(occ_dir,"/allCountsSummary",run_version,".csv"))
-      # call the summarize script for all runs
-      ### speciesList <<- testList
-      # try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfGenus.rmd"),  # file 2
-      #                          output_file =  paste("SummaryReport_", genus , Sys.Date(), ".html", sep=''),
-      #                          output_dir = paste0(gap_dir,"/", genus,"/summaryDocs")))
-      # t2b <- Sys.time()
-      # totalTime <- t2b-t2a
-      # print(paste0("the genus ", genus," includes ",
-      #              length(speciesList), " in a total of ", totalTime," minutes."))
-      # # #append error species to list
-      # if(length(na.omit(lowOccurence)) >0 ){
-      #   lowOccurenceAll <- append(lowOccurenceAll, na.omit(lowOccurence))
-      # }
-      # if(length(na.omit(notModeled)) >0 ){
-      #   notModeledAll <- append(notModeledAll, na.omit(notModeled))
-      # }
-      # if(length(na.omit(fullModelProcess)) >0 ){
-      #   ModeledAll <- append(ModeledAll, na.omit(fullModelProcess))
-      # }
-      # #Clear List of error species, as this information is saved on the
-      # lowOccurence <- list()
-      # notModeled <- list()
-      # fullModelProcess <- list()
+    #calls the master function 
+    result_master = lapply(speciesList, master_run)
+
+    try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfGenus.rmd"),  # file 2
+                             output_file =  paste("SummaryReport_", genus , Sys.Date(), ".html", sep=''),
+                             output_dir = paste0(gap_dir,"/", genus,"/summaryDocs")))
+    t2b <- Sys.time()
+    totalTime <- t2b-t2a
+    print(paste0("the genus ", genus," includes ",
+                 length(speciesList), " in a total of ", totalTime," minutes."))
       
     }
- #else{
- #     print("no species of interest")
-    # }
- # }
 )
-colnames(df5) <- c("Taxon", "Predictor",	"Explanatory weight",	"Included in modeling"
-)
-write.csv(x = df5, 
-          file = paste0(base_dir, "/runSummaries/topPredictorsAll",Sys.Date(),".csv"))
-
-
-# there are duplicates in the df counts data. removing them here 
-dfC <- dfCounts%>% dplyr::distinct(species, .keep_all = TRUE)
-#write out dfCounts 
-write.csv(x = dfC, file = paste0(base_dir, "/runSummaries/allCounts.csv"))
-
-
-
-
-
-
-#20200326 
-# code for generating all species map
-
-# if(length(speciesList) >=1){
-#DANGER ---- delete existing model results
-# for(name in 1:length(speciesList)){
-#   path <- paste0(gap_dir,"/",genus, "/", speciesList[name],"/" , run_version)
-#   unlink(x = path,recursive = TRUE)
-# }
-# speciesList <- speciesList[!speciesList %in% rmSpec]
-# for(k in speciesList){
-#   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/"),
-#                       pattern = "spdist_thrsld_median.tif",
-#                       recursive = TRUE, full.names = TRUE)
-#   if(length(files)>0){
-#     vector[n] <- k
-#     n = n+1
-#   }
-# }
-#write.csv(x = vector, file = paste0(base_dir, "/runSummaries/speciesWithMaps.csv"))
-### the vector list generated here is then used to run the summary of run function once all no cumulative species are removed
-
-
-#20200313 
-#useful code storing here at the moment 
-# for(k in speciesList){
-#   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/"),
-#                       pattern = "cleanedModelingData.csv",
-#                       recursive = TRUE, full.names = TRUE)
-#   if(length(files) == 1){
-#     t5 <- read.csv(files[1])
-#     if(ncol(t5)==10){
-#       df5 <- rbind(df5,t5)
-#     }
-#     if(ncol(t5) == 9){
-#       t5$StateTest = NA
-#       df5 <- rbind(df5,t5)
-#     }
-#     if(class(files)=="character"){
-#       t5 <- data.frame(matrix(nrow = 1, ncol=10))
-#       colnames(t5) <-  c(
-#         "taxon","latitude", "longitude","type","databaseSource", 
-#         "hasLat","hasLong","hasLatLong","iso3_check"
-#       ) 
-#       t5$taxon=k
-#       t5$latitude=NA 
-#       t5$longitude=NA
-#       t5$type=NA
-#       t5$databaseSource=NA
-#       t5$hasLat=NA
-#       t5$hasLong=NA
-#       t5$hasLatLong=NA
-#       t5$iso3_check =NA
-#     }
-#   }
-# }
-
-
-
-
-
-
-
-
-
-#### 20200210 - I'd like to move this to either a 
-# write out model/not modeled lists 
-
-lowOccurenceAll1 <- lapply(lowOccurenceAll, function(x) x[!is.na(x)])
-lowOccurenceAll1 <- lowOccurenceAll1[lengths(lowOccurenceAll1) > 0]
-
-notModeledAll1 <- lapply(notModeledAll, function(x) x[!is.na(x)])
-notModeledAll1 <- notModeledAll1[lengths(notModeledAll1) > 0]
-
-ModeledAll1 <- lapply(ModeledAll, function(x) x[!is.na(x)])
-ModeledAll1 <- ModeledAll1[lengths(ModeledAll1) > 0]
-  
-  
-
-maxLength <- max(c(length(lowOccurenceAll1), 
-                   length(notModeledAll1),
-                   length(ModeledAll1)))
-
-df2 <- data.frame(matrix(ncol=3, nrow= maxLength,data = NA))
-colnames(df2) <- c("lowOccurrenceSpecies",
-                   "speciesNotModeled",
-                   "speciesSuccessfullyModeled"
-)
-
-lo2 <- c(lowOccurenceAll1, rep(NA, nrow(df2)-length(lowOccurenceAll1)))
-nMA <- c(notModeledAll1, rep(NA, nrow(df2)-length(notModeledAll1)))
-sSM <- c(ModeledAll1, rep(NA, nrow(df2)-length(ModeledAll1)))
-
-for(i in 1:length(lo2)){
-  df2$lowOccurrenceSpecies[i] <- lo2[[i]]
-  df2$speciesNotModeled[i] <- nMA[[i]]
-  df2$speciesSuccessfullyModeled[i] <- sSM[[i]]
-}
-                            
-                                    
-write.csv(x = df2, file = paste0(gap_dir, "/summaryDocs/speciesModeledAndNot", Sys.Date(),".csv"))
-
-### combine the all species list, with counts of North American, then the columns of the bins 
-# list of all species names of interest 
-x1 <- read.csv("D:/cwrNA/parameters/statePerTaxon/CWRofUSA_nativeareas_2020_1_30.csv")
-x1 <- as.data.frame(unique(x1$name))
-
-#read in counts for all species
-x2 <- read.csv("D:/cwrNA/parameters/occurenceData/allCountsSummary.csv") %>%
-  dplyr::select(species, NorthAmericanPoint)
-## for some reason some species are making it on to this list twice. Dropping them here 
-x2 <- x2[!duplicated(x2$species),]
-x2 <- distinct(x2) 
-
-# join x1 and x2 by species name 
-t1 <- dplyr::left_join(x = x1, y = x2, by = c("unique(x1$name)" = "species"))
-dim(t1) # this is about 14 values more, meaning there are some 
-
-## there might be a better way to do this but I want to move on here 
-l2 <- as.data.frame(df2$lowOccurrenceSpecies[!is.na(df2$lowOccurrenceSpecies)]) %>%
-  dplyr::mutate(lowOcc = 1) %>%
-  distinct()
-l3 <- as.data.frame(df2$speciesNotModeled[!is.na(df2$speciesNotModeled)]) %>%
-  dplyr::mutate(notModeled = 1)%>%
-  distinct()
-l4 <- as.data.frame(df2$speciesSuccessfullyModeled[!is.na(df2$speciesSuccessfullyModeled)]) %>%
-  dplyr::mutate(ModeledSuccessfully = 1) %>%
-  distinct()
-
-
-t2 <- dplyr::left_join(x = t1, y = l2, by = c("unique(x1$name)" = "df2$lowOccurrenceSpecies[!is.na(df2$lowOccurrenceSpecies)]"))
-t2 <- dplyr::left_join(x = t2, y = l3, by = c("unique(x1$name)" = "df2$speciesNotModeled[!is.na(df2$speciesNotModeled)]"))
-t2 <- dplyr::left_join(x = t2, y = l4, by = c("unique(x1$name)" = "df2$speciesSuccessfullyModeled[!is.na(df2$speciesSuccessfullyModeled)]"))
-
-write.csv(x = t2, file = paste0(gap_dir, "/summaryDocs/modelErrorsSummary", Sys.Date(),".csv"))
-
-
-## base directory is getting redefined to gap_dir somewhere. 
-
-# this is a big process it will take time... 
-try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfRun.rmd"),  # file 2
-                      output_file =  paste("SummaryReport_", run_version , Sys.Date(), ".html", sep=''),
-                      output_dir = paste0(base_dir,"/runSummaries")))
-
-
-#### troubleshooting content, most species list 
-#rerunning intraspecific species due to occurrence compiled from species level 
-# spList <- c("Leymus salina subsp. salina","Leymus salina subsp. salmonis", "Persea palustris",
-#              "Vaccinium crassifolium subsp. crassifolium", "Elymus glabriflorus var. australis",
-# "Elymus glabriflorus var. glabriflorus","Elymus glaucus subsp. mackenziei","Ipomoea cordatotriloba var. cordatotriloba",
-# "Juglans major var. major","Juglans microcarpa var. microcarpa"," Prunus virginiana var. demissa",
-# "Ribes cereum var. cereum","Rubus ursinus subsp. macropetalus","Rubus ursinus subsp. ursinus",
-# "Tripsacum dactyloides var. dactyloides")
-
-# # species for issues 3, delete current folders and rerun completely 
-# # test with Vanilla mexicana before deleting any more runs 
-# spList <- c("Vanilla mexicana","Acer saccharum subsp. ozarkense","Rubus abactus","Rubus ostryifolius",
-#             "Fragaria x ananassa","Artocarpus altilis","Lactuca ludoviciana","Psidium guajava")
-
-# Species for issue 4, try re running the models... watch how they fail. It could be there are just
-# not enough points
-# spList <- c("Allium bigelovii","Leymus salina subsp. mojavensis","Rubus kennedyanus","Vaccinium crassifolium subsp. crassifolium",
-#             "Fragaria chiloensis subsp. sandwicensis","Juglans jamaicensis","Helianthus verticillatus",
-#             "Ipomoea littoralis","Rubus x neglectus","Helianthus praecox subsp. praecox","Manihot walkerae","Rubus arundelanus","Allium gooddingii",
-#             "Rubus orarius","Solanum nelsonii","Vitis aestivalis var. linsecomii","Elymus stebbinsii subsp. stebbinsii","Rubus neglectus","Elymus glabriflorus var. australis","Helianthus arizonensis",
-#             "Vitis x novae-angliae","Elymus interruptus","Ipomoea dumetorum","Helianthus debilis subsp. tardiflorus","Elymus glabriflorus var. glabriflorus","Xanthosoma sagittifolium",
-#             "Juglans cinerea","Prunus andersonii","Ribes quercetorum","Gossypium hirsutum"
-# )
-
-
 
 D:/cwrNA/src/test/barPlots.R 
 
@@ -4387,25 +3861,10 @@ D:/cwrNA/src/test/barPlots.R
 ###
 library(plotly)
 # read in metrics data 
-d1 <- read.csv(file = "D:/cwrNA/parameters/barCharts/allMetricData2020-03-20.csv")
-
-#function for ploting
-plot2<- function(df){
-  fig <- plot_ly(data = df, x = ~HP, y = ~category,
-                 type = 'bar', orientation = 'h', name = "HP", 
-                 marker = list(color = 'rgba(204, 44, 0, 0.6)'
-                 ))%>% 
-    add_trace(x = ~MP, name = 'MP',
-              marker = list(color = 'rgba(255, 145, 0, 0.6)'
-              ))%>% 
-    add_trace(x = ~LP, name = 'LP',
-              marker = list(color = 'rgba(255, 234, 0, 0.6)'
-              ))%>% 
-    layout(barmode = 'stack',
-           xaxis = list(title = "Proportion of taxa (%)"),
-           yaxis = list(title =""))
-  return(fig)
-}
+d1 <- read.csv("D:/cwrNA/runSummaries/allMetricData2020-04-12forFigures.csv")
+dim(d1)
+d1 <- d1[d1$Included.in.summary.metrics == "Y",]
+dim(d1)
 
 #set wd 
 setwd("D:/cwrNA/parameters/barCharts")
@@ -4415,22 +3874,50 @@ setwd("D:/cwrNA/parameters/barCharts")
 
 
 ### generated the data structure I needed to test the plot method 
-d2 <- read.csv(file = "D:/cwrNA/parameters/barCharts/testchart.csv")
+#d2 <- read.csv(file = "D:/cwrNA/parameters/barCharts/testchart.csv")
+
+total <- length(d1$FCSc.mean.priority.category[!is.na(d1$FCSc.mean.priority.category)])
+tA <- d1 %>% 
+  group_by(FCSc.mean.priority.category) %>%
+  dplyr::summarise(count =n())%>%
+  dplyr::mutate(per=paste0(round(100*count/total,2)))
+tA <- tA[c(1,3,2),]
+tA
+tI <- d1 %>% 
+  group_by(FCSin.priority.category) %>%
+  dplyr::summarise(count =n())%>%
+  drop_na()%>% ### 20200411 added clause to drop na values. 
+  dplyr::mutate(per=paste0(round(100*count/total,2)))
+tI <- tI[c(1,3,2,4),]
+tE <- d1 %>% 
+  group_by(FCSex.priority.category) %>%
+  dplyr::summarise(count =n())%>%
+  drop_na()%>% ### 20200411 added clause to drop na values. 
+  dplyr::mutate(per=paste0(round(100*count/total,2)))
+tE <- tE[c(1,3,2,4),]
+
+df2 <- data.frame(matrix(nrow = 3, ncol = 5))
+colnames(df2) <- c("category" ,	"HP",	"MP",	"LP",	"SC")
+df2$category <- as.factor(c("FCSc-mean","FCSex","FCSin" ))
+df2[1,2:4] <- as.numeric(tA$per)
+df2[1,5] <- as.numeric(0)
+df2[2,2:5] <- as.numeric(tE$per)
+df2[3,2:5] <- as.numeric(tI$per)
 
 c1 <- factor(c("FCSin","FCSex","FCSc-mean"), levels = c("FCSin","FCSex","FCSc-mean"))
 
 
-pg <- plot_ly(x = rev(d2$HP), y = c1,
+pg <- plot_ly(x = rev(df2$HP), y = c1,orientation = 'h',
               type = 'bar',  name = "HP",
               marker = list(color = 'rgba(204, 44, 0, 0.6)'
               ))%>% 
-  add_trace(x = rev(d2$MP), name = 'MP',
+  add_trace(x = rev(df2$MP), name = 'MP',
             marker = list(color = 'rgba(255, 145, 0, 0.6)'
             ))%>% 
-  add_trace(x = rev(d2$LP), name = 'LP',
+  add_trace(x = rev(df2$LP), name = 'LP',
             marker = list(color = 'rgba(255, 234, 0, 0.6)'
             ))%>% 
-  add_trace(x = rev(d2$SC), name = 'SC',
+  add_trace(x = rev(df2$SC), name = 'SC',
             marker = list(color = 'rgba(3, 204, 0, 0.6)'
             ))%>% 
   layout(barmode = 'stack',
@@ -4447,9 +3934,11 @@ for(i in 1:length(uc)){
   p <- d1 %>%
     dplyr::filter(Category == uc[i])%>%
     dplyr::group_by(`FCSc.mean.priority.category`)%>%
-    dplyr::summarise(count =n()) %>%
+    dplyr::summarise(count =n())%>%
+    drop_na()%>% ### 20200411 added clause to drop na values. 
     dplyr::mutate(countT= sum(count)) %>%
     dplyr::mutate(per=paste0(round(100*count/countT,2)))
+  
   p1 <- p[,c(1,4)] %>% tidyr::spread(FCSc.mean.priority.category,per) %>%
     dplyr::select(HP,MP,LP)
   priorityGroup$category[i] <- as.character(paste0(uc[i], "  "))
@@ -4462,9 +3951,9 @@ write.csv(x = priorityGroup, file = "priorityGroup.csv")
 c1 <- factor(c("1C","1B","1A"), levels = c("1C","1B","1A"))
 
 pg <- plot_ly(x = rev(priorityGroup$HP), y = c1,
-        type = 'bar',  name = "HP",
-        marker = list(color = 'rgba(204, 44, 0, 0.6)'
-        ))%>% 
+              type = 'bar',  name = "HP",
+              marker = list(color = 'rgba(204, 44, 0, 0.6)'
+              ))%>% 
   add_trace(x = rev(priorityGroup$MP), name = 'MP',
             marker = list(color = 'rgba(255, 145, 0, 0.6)'
             ))%>% 
@@ -4486,6 +3975,7 @@ for(i in 1:length(uc)){
     dplyr::filter(Associated.crop.type.specific == uc[i])%>%
     dplyr::group_by(`FCSc.mean.priority.category`)%>%
     dplyr::summarise(count =n()) %>%
+    drop_na()%>% ### 20200411 added clause to drop na values. 
     dplyr::mutate(countT= sum(count)) %>%
     dplyr::mutate(per=paste0(round(100*count/countT,2)))
   p1 <- p[,c(1,4)] 
@@ -4544,14 +4034,15 @@ htmlwidgets::saveWidget(pg,file = "associateCropType.html")
 
 
 # assocaited crop 
-uc <- sort(unique(d1$Associated.crop))
+uc <- sort(unique(d1$Associated.crop.common.name))
 priorityGroup <- data.frame(matrix(ncol = 4, nrow = length(uc)))
 colnames(priorityGroup) <- c("category","HP", "MP","LP")
 for(i in 1:length(uc)){
   p <- d1 %>%
-    dplyr::filter(Associated.crop == uc[i])%>%
+    dplyr::filter(Associated.crop.common.name == uc[i])%>%
     dplyr::group_by(`FCSc.mean.priority.category`)%>%
     dplyr::summarise(count =n()) %>%
+    drop_na()%>% ### 20200411 added clause to drop na values. 
     dplyr::mutate(countT= sum(count)) %>%
     dplyr::mutate(per=paste0(round(100*count/countT,2)))
   p1 <- p[,c(1,4)] 
@@ -4584,7 +4075,7 @@ for(i in 1:length(uc)){
     }
   }
 }
-write.csv(x = priorityGroup, file = "associateCrop.csv")
+write.csv(x = priorityGroup, file = "Associated.crop.common.name.csv")
 
 
 uc1 <- rev(as.character(uc))
@@ -4607,8 +4098,7 @@ pg <- plot_ly(x = rev(priorityGroup$HP), y = c1,
          yaxis = list(title =""))
 
 pg
-priorityGroup
-htmlwidgets::saveWidget(pg,file = "associateCrop.html")
+htmlwidgets::saveWidget(pg,file = "Associated.crop.common.name.html")
 
 # redlist groups 
 
@@ -4686,6 +4176,28 @@ pg <- plot_ly(x = rev(priorityGroup$HP), y = c1,
 
 pg 
 htmlwidgets::saveWidget(pg,file = "redlistGroups.html")
+
+
+
+
+# ### older function did not work due to the ordering of factors issue 
+# #function for ploting
+# plot2<- function(df){
+#   fig <- plot_ly(data = df, x = ~HP, y = ~category,
+#                  type = 'bar', orientation = 'h', name = "HP", 
+#                  marker = list(color = 'rgba(204, 44, 0, 0.6)'
+#                  ))%>% 
+#     add_trace(x = ~MP, name = 'MP',
+#               marker = list(color = 'rgba(255, 145, 0, 0.6)'
+#               ))%>% 
+#     add_trace(x = ~LP, name = 'LP',
+#               marker = list(color = 'rgba(255, 234, 0, 0.6)'
+#               ))%>% 
+#     layout(barmode = 'stack',
+#            xaxis = list(title = "Proportion of taxa (%)"),
+#            yaxis = list(title =""))
+#   return(fig)
+# }
 D:/cwrNA/src/test/combineAllAndModeledData.R 
 
 ###
@@ -4885,40 +4397,29 @@ D:/cwrNA/src/test/deletingFiles.R
 ### 
 # a script that will clean all older model run from the computer 
 # 20200108 
+# dan.carver@carverd.com
 ### 
 
 # background 
 
 
-baseDir <- "D:/cwrNA/gap_analysis"
+baseDir <- "D:/cwrUSA/gap_analysis"
 
 oldFiles <- list.dirs(path = baseDir, full.names = TRUE, recursive = TRUE) 
 
-old2 <- oldFiles[grep(pattern = "test20200203$", x = oldFiles)]
+occData <- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-04-07.csv",
+                             header = TRUE)
+occData <- occData[,2:nrow(occData)]
+speciesList <- unique(occData$taxon)
+
+old2 <- oldFiles[grep(pattern = "test20191023$", x = oldFiles)]
 #filter files by the species list 
 old3 <- old2[speciesList %in% old2]
 
 n <- list.files(old2[1], recursive = TRUE)
 
-unlink(x = old2[1], recursive = TRUE)
+unlink(x = old2[6], recursive = TRUE)
 
-
-speciesList<- c("Leymus salina subsp. salina",
-                "Leymus salina subsp. salmonis",
-                "Persea palustris",
-                "Vaccinium crassifolium subsp. crassifolium",
-                "Elymus glabriflorus var. australis",
-                "Elymus glabriflorus var. glabriflorus",
-                "Elymus glaucus subsp. mackenziei",
-                "Ipomoea cordatotriloba var. cordatotriloba",
-                "Juglans major var. major",
-                "Juglans microcarpa var. microcarpa",
-                "Prunus virginiana var. demissa",
-                "Ribes cereum var. cereum",
-                "Rubus ursinus subsp. macropetalus",
-                "Rubus ursinus subsp. ursinus",
-                "Tripsacum dactyloides var. dactyloides"
-)
 
 
 allFiles <- list.files(path="D:/cwrNA/gap_analysis/Capsicum", full.names = TRUE, recursive = TRUE) 
@@ -4928,17 +4429,256 @@ unlink(x=oldFiles)
 
 deleteALot <- function(directory,pattern){
   allFolders <- list.dirs(path = directory, full.names = TRUE, recursive = TRUE)
-  oldFolders <- allFolders[grep(pattern = "test20191206$", x = allFolders)]
+  oldFolders <- allFolders[grep(pattern = pattern, x = allFolders)]
   unlink(x = oldFolders, recursive = TRUE)
   print(paste0("All files and folders containing ", pattern, " are gone forever."))
 }
 
 
-listOfPatterns <- c("test20191206$","test20191207$","test20191208$")
+listOfPatterns <- c("test20200131$")
 
 for(i in listOfPatterns){
-  deleteALot(directory = "D:/cwrNA/gap_analysis/temp", pattern = i)
+  deleteALot(directory = "D:/cwrUSA/gap_analysis", pattern = i)
 }
+D:/cwrNA/src/test/generateAllMetricData.R 
+
+###
+# generating all summary data metrics 
+# 20200408 
+# dan.carver@carverd.com 
+### 
+
+
+# occurrence data from data prep step 
+d1 <- read.csv("D:/cwrNA/parameters/USA_cropWildRelativeInventory/CWRofUSA_Inventory_2020_02_26.csv", header = TRUE)
+fL <- d1 %>% dplyr::select(Taxon_GRIN.Global_2019.final)
+
+# pull in original data from the project 
+CWRuslist <- read.csv("D:/cwrNA/speciesList/CWRoftheUSA_synonyms20191114.csv")
+tL <- CWRuslist %>% dplyr::select(Taxon_GRIN.Global_2019.final)
+
+# join to select species that are on both list 
+fullList <- dplyr::inner_join(x = fL, y= tL, by = "Taxon_GRIN.Global_2019.final") %>%
+  dplyr::distinct()
+
+#genera List 
+genera <- sort(unique(occData$genus))
+# set run version 
+run_v <- "test20200203"
+## pull counts, gap analysis scores, and redlist scores from the model run folder 
+
+# create empty dataframe for counts CSV 
+df1 <- data.frame(matrix(nrow = nrow(fullList), ncol = 1))
+colnames(df1) <- "species"
+df1$species <- as.character(sort(fullList$Taxon_GRIN.Global_2019.final))
+# loop over all species append values 
+n=1
+for(i in genera){
+  #select all species in genera 
+  oc1 <- occData %>% 
+    dplyr::filter(genus == i)
+  spList2 <- df1[grep(pattern = i,x = df1$species),]
+  for(j in spList2){
+    sp_dir <- paste0("D:/cwrNA/gap_analysis/",i,"/",j,"/",run_v)
+    # test for file and read it as object 
+    if(file.exists(paste0(sp_dir, "/counts.csv"))){
+      ct <- read.csv(paste0(sp_dir, "/counts.csv"))
+      if(n==1){
+        ctAll <- ct 
+      }else{
+        ctAll <- dplyr::bind_rows(ctAll, ct)
+      }
+    }
+    if(file.exists(paste0(sp_dir, "/gap_analysis/exsitu/summary.csv"))){
+      gE <- read.csv(paste0(sp_dir, "/gap_analysis/exsitu/summary.csv"))
+      #assign classes 
+      if (gE$FCS < 25) {
+        gE$Exsitu_Score <- "HP"
+      } else if (gE$FCS >= 25 & gE$FCS < 50) {
+        gE$Exsitu_Score <- "MP"
+      } else if (gE$FCS >= 50 & gE$FCS < 75) {
+        gE$Exsitu_Score <- "LP"
+      } else {
+        gE$Exsitu_Score <- "SC"
+      }
+      if(n==1){
+        gEAll <- gE 
+      }else{
+        gEAll <- dplyr::bind_rows(gEAll, gE)
+      }
+    }
+    if(file.exists(paste0(sp_dir, "/gap_analysis/insitu/summary.csv"))){
+      gI <- read.csv(paste0(sp_dir, "/gap_analysis/insitu/summary.csv")) %>%
+        dplyr::select("ID","SRS.NTOTAL",	"SRS.ProTotal","SRS.SRS","SRS.SRS","GRS","ERS","FCS")
+      if (gI$FCS < 25) {
+        gI$Insitu_Score <- "HP"
+      } else if (gI$FCS >= 25 & gI$FCS < 50) {
+        gI$Insitu_Score <- "MP"
+      } else if (gI$FCS >= 50 & gI$FCS < 75) {
+        gI$Insitu_Score <- "LP"
+      } else {
+        gI$Insitu_Score <- "SC"
+      }
+      if(n==1){
+        gIAll <- gI 
+      }else{
+        gIAll <- dplyr::bind_rows(gIAll, gI)
+      }
+    }
+    if(file.exists(paste0(sp_dir, "/gap_analysis/combined/fcs_combined.csv"))){
+      gF <- read.csv(paste0(sp_dir, "/gap_analysis/combined/fcs_combined.csv"))
+      if(n==1){
+        gFAll <- gF 
+      }else{
+        gFAll <- dplyr::bind_rows(gFAll, gF)
+      }
+    }
+    if(file.exists(paste0(sp_dir, "/gap_analysis/redList/listingValues4kmClean.csv"))){
+      rL <- read.csv(paste0(sp_dir, "/gap_analysis/redList/listingValues4kmClean.csv"))
+      if(n==1){
+        rlAll <- rL 
+      }else{
+        rlAll <- dplyr::bind_rows(rlAll, rL)
+      }
+    }
+    n= n+1
+  }
+  print(paste0(i, " have been compiled"))
+}
+
+# generate the combined score for redList Values 
+rlAll$aVal <- NA
+rlAll$eVal <- NA
+# add numeric values based on status 
+for(i in 1:nrow(rlAll)){
+  if (rlAll$AOO.Status[i] == "Least Concern (LC)"){
+    rlAll$aVal[i] <- 1 }
+  if (rlAll$AOO.Status[i] == "Possible Near Threatened (NT)"){
+    rlAll$aVal[i] <- 2 }
+  if (rlAll$AOO.Status[i] == "Vulnerable (VU)"){
+    rlAll$aVal[i] <- 3 }
+  if (rlAll$AOO.Status[i] == "Endangered (EN)"){ 
+    rlAll$aVal[i] <- 4 }
+  if (rlAll$AOO.Status[i] == "Critically Endangered (CR)"){
+    rlAll$aVal[i] <- 5 }
+  # EOO values 
+  if (rlAll$EOO.Status[i] == "Least Concern (LC)"){
+    rlAll$eVal[i] <- 1 }
+  if (rlAll$EOO.Status[i] == "Possible Near Threatened (NT)"){
+    rlAll$eVal[i] <- 2 }
+  if (rlAll$EOO.Status[i] == "Vulnerable (VU)"){
+    rlAll$eVal[i] <- 3 }
+  if (rlAll$EOO.Status[i] == "Endangered (EN)"){ 
+    rlAll$eVal[i] <- 4 }
+  if (rlAll$EOO.Status[i] == "Critically Endangered (CR)"){
+    rlAll$eVal[i] <- 5 }
+  
+  if(rlAll$eVal[i] >= rlAll$aVal[i]){
+    stat <- rlAll$EOO.Status[i]
+  }else{
+    stat <- rlAll$AOO.Status[i]
+  }
+  
+  rlAll$`Combined Status`[i] <- stat
+}
+
+rlAll <- rlAll %>% dplyr::select(c("taxon","EOO.Area.km2","EOO.Status","AOO",
+                                   "AOO.adjusted.Minimum","AOO.Status","Combined Status"))
+# join based on full specices list to identify non present species 
+ctFull <- dplyr::full_join(x = df1,y=ctAll, by = "species")
+
+gEFull <- dplyr::full_join(x = ctFull,y=gEAll, by = c("species" = "ID"))
+
+gIFull <- dplyr::full_join(x = gEFull,y=gIAll, by =  c("species" = "ID"))
+
+gFFull <- dplyr::full_join(x = gIFull,y=gFAll, by =  c("species" = "ID"))
+
+allSummary <- dplyr::full_join(x = gFFull,y=rlAll, by = c("species" = "taxon"))
+
+
+# add field based on if speciecs will be included in the higher level analysis 
+noSS <- c("Phaseolus acutifolius","Phaseolus leptostachyus","Elymus elymoides","Leymus mollis","Phaseolus maculatus","Hordeum jubatum","Helianthus petiolaris","Ribes sanguineum","Phaseolus polystachios","Prunus serotina","Elymus trachycaulus","Hordeum brachyantherum","Ribes roezlii","Rubus hispidus","Ribes hudsonianum","Helianthus nuttallii","Helianthus pauciflorus","Humulus lupulus","Allium geyeri","Ribes oxyacanthoides","Fragaria x ananassa","Helianthus occidentalis","Fragaria virginiana","Elymus lanceolatus","Fragaria vesca","Helianthus niveus","Helianthus praecox","Prunus fasciculata","Ribes malvaceum","Rubus arcticus","Vitis rotundifolia","Fragaria chiloensis","Ribes aureum","Acer saccharum","Allium victorialis","Elymus stebbinsii","Helianthus debilis","Ipomoea ternifolia","Lactuca tatarica","Prunus ilicifolia","Prunus pumila","Ribes californicum","Rubus idaeus","Saccharum brevibarbe","Vitis aestivalis","Vitis cinerea","Zizania aquatica","Zizania palustris", "Allium schoenoprasum","Elymus glabriflorus",
+          "Elymus glaucus","Ipomoea cordatotriloba","Juglans major","Juglans microcarpa","Leymus salina","Prunus virginiana","Ribes cereum","Rubus ursinus","Tripsacum dactyloides","Vaccinium crassifolium","Vaccinium erythrocarpum","Vaccinium ovalifolium"
+)
+allSummary$`Included in Summaries` <- !allSummary$species %in% noSS 
+
+
+# change column names 
+allSummary <- allSummary %>% dplyr::select(-Exsitu_Score)
+
+
+View(allSummary)
+#drop NA row 
+allSummary <- allSummary[2:nrow(allSummary),]
+
+tna <- allSummary$totalUseful - allSummary$NA_occurrences
+View(tna)
+naMa <- allSummary$NA_occurrences - allSummary$SRS.NTOTAL
+View(naMa)
+newCols <- c("Species",
+             "Total Records",	"Records with latitude",	"Records with longitude",	
+             "Records with coordinates",
+             " Total G records",	'Total G records with coordinates',	
+             "Total H Records",	"Total H with coordinates",
+             "Number of unique data sources",
+             "Total occurrences in North America",	"Total G occurrences in North America",
+             "Total H occurrences in North America",	
+             "SRSex",	"GRSex",	"ERSex",	"FCSex", "Exsitu Conservation Score",
+             "Total occurrences in modeled area",	
+             "Total occcurrens in modeled area in protected areas",
+             "SRSin",	"GRSin",	"ERSin",	"FCSin", "Insitu Conservation Score",	
+             "FCSex_value",	"FCSin_value",	
+             "FCSc_min",	"FCSc_max",	"FCSc mean",
+             "FCSc_min priority category",	"FCSc_max priority category",	
+             "FCSc mean priority category",
+             "EOO area km2", "EOO status",	"AOO",	"AOO adjusted minimum",	"AOO status",
+             "Combined status", "Included in Summaries"
+)
+
+colnames(allSummary) <- newCols
+View(allSummary)
+write.csv(x = allSummary, file = paste0("D:/cwrNA/runSummaries/allMetricData", Sys.Date(), ".csv"))
+
+
+# :) run from here
+
+
+# inport the CWR inventory and join the priority level and the crop type for futher summaries 
+cwrIn <- d1 %>% dplyr::select("Taxon_GRIN.Global_2019.final","Crop.or.WUS.use_general", 
+                              "Priority.2019","Crop.or.WUS.use_1","Genus","Associated_crop_common.name")
+
+cwrIn$name <- as.character(cwrIn$Taxon_GRIN.Global_2019.final) 
+useGroup <- dplyr::left_join(x = allSummary ,y= cwrIn, by= c("Species" = "name"))
+View(useGroup)
+### adding the median model data to this data to double check true model runs for each species 
+allM <- read.csv("D:/cwrNA/runSummaries/median_summary_test20200203.csv")
+dt2 <- dplyr::left_join(useGroup, allM, by = c("Species" = "species"))
+
+### generate content for figures 
+dFig <- dt2[,c(1,
+               43,42,44,45,46, 
+               14:18,
+               21:25,
+               26,27,
+               28:30,
+               31:33,
+               35,38,
+               39)]
+colnames(dFig) <- c("Taxon",
+                    "Category",	"Associated crop type general","Associated crop type specific", "Genus",	"Associated crop",
+                    "SRSex",	"GRSex",	"ERSex",	"FCSex",	"FCSex priority category",
+                    "SRSin",	"GRSin",	"ERSin",	"FCSin",	"FCSin priority category",
+                    "FCSex value",	"FCSin value",
+                    "FCSc_min",	"FCSc_max",	"FCSc mean",
+                    "FCSc_min priority category", "FCSc_max priority category",	"FCSc mean priority category",
+                    "EOO status", "AOO status",
+                    "Combined threat assessment status")
+View(dFig)
+write.csv(x = dFig, file = paste0("D:/cwrNA/runSummaries/allMetricData_ForFigures", Sys.Date(), ".csv"))
+
+
+
+
 D:/cwrNA/src/test/generatingCountrySummaryCountsForSpecies.R 
 
 ###
@@ -5010,6 +4750,50 @@ d2a <- intersect1@data %>%
 
 write.csv(d2a,file=paste0(occ_dir, "/allNorthAmericaCounts", Sys.Date(),".csv"))
 
+D:/cwrNA/src/test/occurrenceDataByGenus.R 
+
+###
+# compile genus level data for all species based on the run data from 202002 model runs 
+# dan.carver@carverd.com
+# 20200414
+###
+library(tidyverse)
+#simple option 
+# use existing occurrence database 
+
+d1 <- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-04-07.csv",
+                             header = TRUE)
+d1 <- d1[,2:ncol(d1)]
+genera <- sort(unique(d1$genus))
+
+#replace source for midwest herdarium 
+t1 <- d1[d1$databaseSource == "midwestHerbarium ",]
+t1$databaseSource <- "Consortium of Midwest Herbaria (2019)"
+t2 <- d1[d1$databaseSource != "midwestHerbarium ",]
+d1 <- rbind(t1,t2)
+
+
+
+o1 <- "D:/cwrNA/occurrence_data2019_05_29/genusOccurrences"
+c1 <- data.frame(matrix(nrow = 0,ncol=2))
+colnames(c1) <- c("taxon", "count")
+# loop over genera 
+for(i in genera){
+  d2 <- d1[d1$genus == i,]
+  write.csv(x = d2, file = paste0(o1, "/",i,Sys.Date(),".csv"))
+  d3 <- d2 %>%
+    dplyr::group_by(taxon) %>%
+    dplyr::summarise(count = n())
+  c1 <- rbind(c1,d3)
+}
+# pull the data summary document and join to check species total occurrences 
+d4 <- read.csv("D:/cwrNA/runSummaries/allMetricData2020-04-12forFigures.csv")
+d4 <- d4[,c(1,8,11)]
+
+j1 <- dplyr::left_join(c1, d4, by=c("taxon"="Taxon")) %>%
+  dplyr::mutate(differnce = count - Total.Records)
+View(j1)
+write.csv(x = j1, file = paste0(o1, "/summaryCounts",Sys.Date(),".csv"))
 D:/cwrNA/src/test/priority_score_summary_graph_2020.R 
 
 # H. Achicanoy
@@ -5137,19 +4921,20 @@ D:/cwrNA/src/test/priority_score2020.R
 
 library(tidyverse)
 library(grid)
+library(readxl)
 
 root <- 'D:/cwrNA/parameters/priorityFigure'
-df   <- readxl::read_excel(paste0(root,'/allMetricData2020-03-20_forfigsonly.xlsx'), sheet = 1)
-cats <- c('Category','Associated crop type specific','Associated crop')
-
-
-
+df   <- read.csv("D:/cwrNA/runSummaries/allMetricData2020-04-12forFigures.csv")
+cats <- c('Category','Associated.crop.type.specific','Associated.crop.common.name')
+dim(df)
+df <- df[df$Included.in.summary.metrics == "Y",]
+dim(df)
 # Category graph
 tbl <- df %>%
-  dplyr::select('Taxon','Category','FCSc mean')
+  dplyr::select('Taxon','Category','FCSc.mean')
 tbl %>%
   ggplot2::ggplot(aes(x = factor(Category,levels=c("(1)C","(1)B","(1)A")),
-                      y = `FCSc mean`, group = factor(Category,levels=c("(1)C","(1)B","(1)A"))))+
+                      y = `FCSc.mean`, group = factor(Category,levels=c("(1)C","(1)B","(1)A"))))+
   ggplot2::theme_bw() +
   ggplot2::geom_blank() +
   ggplot2::coord_flip() +
@@ -5158,12 +4943,12 @@ tbl %>%
   ggplot2::annotate("rect", ymin=25, ymax=50, xmin=0.5, xmax=3.5, alpha=.5, fill="orange") +
   ggplot2::annotate("rect", ymin=50, ymax=75, xmin=0.5, xmax=3.5, alpha=.4, fill="yellow") +
   ggplot2::annotate("rect", ymin=75, ymax=100, xmin=0.5, xmax=3.5, alpha=.3, fill="forestgreen") +
-  ggplot2::geom_point() +
-  ggplot2::geom_jitter(width = 0.35)+
+  #ggplot2::geom_point() +
+  ggplot2::geom_jitter(width = 0.30)+
   ggplot2::geom_point(data = tbl %>%
                         dplyr::group_by(Category) %>%
-                        dplyr::summarise(`FCSc mean` = mean(`FCSc mean`)), size = 5, colour = 'red') +
-  ggplot2::ylab(label="Final conservation score (FCSc mean)") + ggplot2::xlab("") +
+                        dplyr::summarise(`FCSc.mean` = mean(`FCSc.mean`, na.rm=TRUE)), size = 5, colour = 'red') +
+  ggplot2::ylab(label="Final conservation score (FCSc-mean)") + ggplot2::xlab("") +
   ggplot2::scale_y_continuous(breaks = seq(0, 100, 10)) +
   ggplot2::theme(panel.grid.major.x = element_blank(),
                  panel.grid.minor.x = element_blank(),
@@ -5181,13 +4966,13 @@ tbl %>%
                     fontface = 2) +
   ggsave(paste0(root,"/category.png"), device = "png", units = "in", width = 10, height = 6, dpi = 320)
 
-# Associated crop type specific
+# Associated.crop.type.specific
 tbl <- df %>%
-  dplyr::select('Taxon','Associated crop type specific','FCSc mean')
+  dplyr::select('Taxon','Associated.crop.type.specific','FCSc.mean')
 colnames(tbl)[2] <- 'Category'
 lbls <- (tbl$Category %>% unique)[tbl$Category %>% unique %>% order(decreasing = T)]
 tbl %>%
-  ggplot2::ggplot(aes(x = factor(Category,levels=lbls), y = `FCSc mean`, group = factor(Category,levels=lbls))) +
+  ggplot2::ggplot(aes(x = factor(Category,levels=lbls), y = `FCSc.mean`, group = factor(Category,levels=lbls))) +
   ggplot2::theme_bw() +
   ggplot2::geom_blank() +
   ggplot2::coord_flip() +
@@ -5196,12 +4981,12 @@ tbl %>%
   ggplot2::annotate("rect", ymin=25, ymax=50, xmin=0.5, xmax=14, alpha=.5, fill="orange") +
   ggplot2::annotate("rect", ymin=50, ymax=75, xmin=0.5, xmax=14, alpha=.4, fill="yellow") +
   ggplot2::annotate("rect", ymin=75, ymax=100, xmin=0.5, xmax=14, alpha=.3, fill="forestgreen") +
-  ggplot2::geom_point() +
+  #ggplot2::geom_point() +
   ggplot2::geom_jitter(width = 0.25)+
   ggplot2::geom_point(data = tbl %>%
                         dplyr::group_by(Category) %>%
-                        dplyr::summarise(`FCSc mean` = mean(`FCSc mean`)), size = 5, colour = 'red') +
-  ggplot2::ylab(label="Final conservation score (FCSc mean)") + ggplot2::xlab("") +
+                        dplyr::summarise(`FCSc.mean` = mean(`FCSc.mean`, na.rm=TRUE)), size = 5, colour = 'red') +
+  ggplot2::ylab(label="Final conservation score (FCSc-mean)") + ggplot2::xlab("") +
   ggplot2::scale_y_continuous(breaks = seq(0, 100, 10)) +
   ggplot2::theme(panel.grid.major.x = element_blank(),
                  panel.grid.minor.x = element_blank(),
@@ -5219,13 +5004,13 @@ tbl %>%
                     fontface = 2) +
   ggsave(paste0(root,"/associated_crop_type_specific.png"), device = "png", units = "in", width = 10, height = 6, dpi = 320)
 
-# Associated crop
+# Associated.crop.common.name
 tbl <- df %>%
-  dplyr::select('Taxon','Associated crop','FCSc mean')
+  dplyr::select('Taxon','Associated.crop.common.name','FCSc.mean')
 colnames(tbl)[2] <- 'Category'
 lbls <- (tbl$Category %>% unique)[tbl$Category %>% unique %>% order(decreasing = T)]
 tbl %>%
-  ggplot2::ggplot(aes(x = factor(Category,levels=lbls), y = `FCSc mean`, group = factor(Category,levels=lbls))) +
+  ggplot2::ggplot(aes(x = factor(Category,levels=lbls), y = `FCSc.mean`, group = factor(Category,levels=lbls))) +
   ggplot2::theme_bw() +
   ggplot2::geom_blank() +
   ggplot2::coord_flip() +
@@ -5234,12 +5019,12 @@ tbl %>%
   ggplot2::annotate("rect", ymin=25, ymax=50, xmin=0, xmax=53, alpha=.5, fill="orange") +
   ggplot2::annotate("rect", ymin=50, ymax=75, xmin=0, xmax=53, alpha=.4, fill="yellow") +
   ggplot2::annotate("rect", ymin=75, ymax=100, xmin=0, xmax=53, alpha=.3, fill="forestgreen") +
-  ggplot2::geom_point() +
+  #ggplot2::geom_point() +
   ggplot2::geom_jitter(width = 0.25)+
   ggplot2::geom_point(data = tbl %>%
                         dplyr::group_by(Category) %>%
-                        dplyr::summarise(`FCSc mean` = mean(`FCSc mean`)), size = 5, colour = 'red') +
-  ggplot2::ylab(label="Final conservation score (FCSc mean)") + ggplot2::xlab("") +
+                        dplyr::summarise(`FCSc.mean` = mean(`FCSc.mean`, na.rm=TRUE)), size = 5, colour = 'red') +
+  ggplot2::ylab(label="Final conservation score (FCSc-mean)") + ggplot2::xlab("") +
   ggplot2::scale_y_continuous(breaks = seq(0, 100, 10)) +
   ggplot2::theme(panel.grid.major.x = element_blank(),
                  panel.grid.minor.x = element_blank(),
@@ -5256,6 +5041,9 @@ tbl %>%
                     size     = 4,
                     fontface = 2) +
   ggsave(paste0(root,"/associated_crop.png"), device = "png", units = "in", width = 10, height = 12, dpi = 320)
+
+
+
 D:/cwrNA/src/test/select_categories_indicator.R 
 
 #María Victoria Díaz
@@ -5461,7 +5249,348 @@ select_spp_indicator <- function(iso_list="ALL", opt=c("min","max","mean","ex","
 #iso_list <- "NAM"
 #indic_iso <- select_spp_indicator(iso_list, opt=c("min","max","mean","ex","in"))
 #write.csv(indic_iso,paste0("//dapadfs/Workspace_cluster_9/Aichi13/indicator/countries/2018-11-16/NA","_",Sys.Date(),".csv"),row.names=F, quote=F)
+D:/cwrNA/src/test/storageContent.R 
+
+###
+# storage for notes and useful one time code chunks during development 
+# 20200414
+# dan.carver@carverd.com
+### 
+
+
+# there are duplicates in the df counts data. removing them here 
+dfC <- dfCounts%>% dplyr::distinct(species, .keep_all = TRUE)
+#write out dfCounts 
+write.csv(x = dfC, file = paste0(base_dir, "/runSummaries/allCounts.csv"))
+
+
+
+
+
+
+#20200326 
+# code for generating all species map
+
+# if(length(speciesList) >=1){
+#DANGER ---- delete existing model results
+# for(name in 1:length(speciesList)){
+#   path <- paste0(gap_dir,"/",genus, "/", speciesList[name],"/" , run_version)
+#   unlink(x = path,recursive = TRUE)
+# }
+# speciesList <- speciesList[!speciesList %in% rmSpec]
+# for(k in speciesList){
+#   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/"),
+#                       pattern = "spdist_thrsld_median.tif",
+#                       recursive = TRUE, full.names = TRUE)
+#   if(length(files)>0){
+#     vector[n] <- k
+#     n = n+1
+#   }
+# }
+#write.csv(x = vector, file = paste0(base_dir, "/runSummaries/speciesWithMaps.csv"))
+### the vector list generated here is then used to run the summary of run function once all no cumulative species are removed
+
+
+#20200313 
+#useful code storing here at the moment 
+# for(k in speciesList){
+#   files <- list.files(path = paste0(gap_dir,"/", genus,"/",k,"/",run_version, "/"),
+#                       pattern = "cleanedModelingData.csv",
+#                       recursive = TRUE, full.names = TRUE)
+#   if(length(files) == 1){
+#     t5 <- read.csv(files[1])
+#     if(ncol(t5)==10){
+#       df5 <- rbind(df5,t5)
+#     }
+#     if(ncol(t5) == 9){
+#       t5$StateTest = NA
+#       df5 <- rbind(df5,t5)
+#     }
+#     if(class(files)=="character"){
+#       t5 <- data.frame(matrix(nrow = 1, ncol=10))
+#       colnames(t5) <-  c(
+#         "taxon","latitude", "longitude","type","databaseSource", 
+#         "hasLat","hasLong","hasLatLong","iso3_check"
+#       ) 
+#       t5$taxon=k
+#       t5$latitude=NA 
+#       t5$longitude=NA
+#       t5$type=NA
+#       t5$databaseSource=NA
+#       t5$hasLat=NA
+#       t5$hasLong=NA
+#       t5$hasLatLong=NA
+#       t5$iso3_check =NA
+#     }
+#   }
+# }
+
+
+
+
+
+
+
+
+
+#### 20200210 - I'd like to move this to either a 
+# write out model/not modeled lists 
+
+lowOccurenceAll1 <- lapply(lowOccurenceAll, function(x) x[!is.na(x)])
+lowOccurenceAll1 <- lowOccurenceAll1[lengths(lowOccurenceAll1) > 0]
+
+notModeledAll1 <- lapply(notModeledAll, function(x) x[!is.na(x)])
+notModeledAll1 <- notModeledAll1[lengths(notModeledAll1) > 0]
+
+ModeledAll1 <- lapply(ModeledAll, function(x) x[!is.na(x)])
+ModeledAll1 <- ModeledAll1[lengths(ModeledAll1) > 0]
+
+
+
+maxLength <- max(c(length(lowOccurenceAll1), 
+                   length(notModeledAll1),
+                   length(ModeledAll1)))
+
+df2 <- data.frame(matrix(ncol=3, nrow= maxLength,data = NA))
+colnames(df2) <- c("lowOccurrenceSpecies",
+                   "speciesNotModeled",
+                   "speciesSuccessfullyModeled"
+)
+
+lo2 <- c(lowOccurenceAll1, rep(NA, nrow(df2)-length(lowOccurenceAll1)))
+nMA <- c(notModeledAll1, rep(NA, nrow(df2)-length(notModeledAll1)))
+sSM <- c(ModeledAll1, rep(NA, nrow(df2)-length(ModeledAll1)))
+
+for(i in 1:length(lo2)){
+  df2$lowOccurrenceSpecies[i] <- lo2[[i]]
+  df2$speciesNotModeled[i] <- nMA[[i]]
+  df2$speciesSuccessfullyModeled[i] <- sSM[[i]]
+}
+
+
+write.csv(x = df2, file = paste0(gap_dir, "/summaryDocs/speciesModeledAndNot", Sys.Date(),".csv"))
+
+### combine the all species list, with counts of North American, then the columns of the bins 
+# list of all species names of interest 
+x1 <- read.csv("D:/cwrNA/parameters/statePerTaxon/CWRofUSA_nativeareas_2020_1_30.csv")
+x1 <- as.data.frame(unique(x1$name))
+
+#read in counts for all species
+x2 <- read.csv("D:/cwrNA/parameters/occurenceData/allCountsSummary.csv") %>%
+  dplyr::select(species, NorthAmericanPoint)
+## for some reason some species are making it on to this list twice. Dropping them here 
+x2 <- x2[!duplicated(x2$species),]
+x2 <- distinct(x2) 
+
+# join x1 and x2 by species name 
+t1 <- dplyr::left_join(x = x1, y = x2, by = c("unique(x1$name)" = "species"))
+dim(t1) # this is about 14 values more, meaning there are some 
+
+## there might be a better way to do this but I want to move on here 
+l2 <- as.data.frame(df2$lowOccurrenceSpecies[!is.na(df2$lowOccurrenceSpecies)]) %>%
+  dplyr::mutate(lowOcc = 1) %>%
+  distinct()
+l3 <- as.data.frame(df2$speciesNotModeled[!is.na(df2$speciesNotModeled)]) %>%
+  dplyr::mutate(notModeled = 1)%>%
+  distinct()
+l4 <- as.data.frame(df2$speciesSuccessfullyModeled[!is.na(df2$speciesSuccessfullyModeled)]) %>%
+  dplyr::mutate(ModeledSuccessfully = 1) %>%
+  distinct()
+
+
+t2 <- dplyr::left_join(x = t1, y = l2, by = c("unique(x1$name)" = "df2$lowOccurrenceSpecies[!is.na(df2$lowOccurrenceSpecies)]"))
+t2 <- dplyr::left_join(x = t2, y = l3, by = c("unique(x1$name)" = "df2$speciesNotModeled[!is.na(df2$speciesNotModeled)]"))
+t2 <- dplyr::left_join(x = t2, y = l4, by = c("unique(x1$name)" = "df2$speciesSuccessfullyModeled[!is.na(df2$speciesSuccessfullyModeled)]"))
+
+write.csv(x = t2, file = paste0(gap_dir, "/summaryDocs/modelErrorsSummary", Sys.Date(),".csv"))
+
+
+## base directory is getting redefined to gap_dir somewhere. 
+
+# this is a big process it will take time... 
+try(rmarkdown::render(paste0(repo_dir, "/summaryMarkdown/summaryOfRun.rmd"),  # file 2
+                      output_file =  paste("SummaryReport_", run_version , Sys.Date(), ".html", sep=''),
+                      output_dir = paste0(base_dir,"/runSummaries")))
+
+
+#### troubleshooting content, most species list 
+#rerunning intraspecific species due to occurrence compiled from species level 
+# spList <- c(
+"Leymus salina subsp. salina",
+"Leymus salina subsp. salmonis",
+"Persea palustris",
+"Vaccinium crassifolium subsp. crassifolium",
+"Elymus glabriflorus var. australis",
+"Elymus glabriflorus var. glabriflorus",
+"Elymus glaucus subsp. mackenziei",
+"Ipomoea cordatotriloba var. cordatotriloba",
+"Juglans major var. major",
+"Juglans microcarpa var. microcarpa",
+" Prunus virginiana var. demissa",
+"Ribes cereum var. cereum",
+"Rubus ursinus subsp. macropetalus",
+"Rubus ursinus subsp. ursinus",
+"Tripsacum dactyloides var. dactyloides")
+
+# # species for issues 3, delete current folders and rerun completely 
+# # test with Vanilla mexicana before deleting any more runs 
+# spList <- c("Vanilla mexicana",
+"Acer saccharum subsp. ozarkense",
+"Rubus abactus",
+"Rubus ostryifolius",
+#             "Fragaria x ananassa",
+"Artocarpus altilis",
+"Lactuca ludoviciana",
+"Psidium guajava")
+
+# Species for issue 4, try re running the models... watch how they fail. It could be there are just
+# not enough points
+# spList <- c("Allium bigelovii",
+"Leymus salina subsp. mojavensis",
+"Rubus kennedyanus",
+"Vaccinium crassifolium subsp. crassifolium",
+#             "Fragaria chiloensis subsp. sandwicensis",
+"Juglans jamaicensis",
+"Helianthus verticillatus",
+#             "Ipomoea littoralis",
+"Rubus x neglectus",
+"Helianthus praecox subsp. praecox",
+"Manihot walkerae",
+"Rubus arundelanus",
+"Allium gooddingii",
+#             "Rubus orarius",
+"Solanum nelsonii",
+"Vitis aestivalis var. linsecomii",
+"Elymus stebbinsii subsp. stebbinsii",
+"Rubus neglectus",
+"Elymus glabriflorus var. australis",
+"Helianthus arizonensis",
+#             "Vitis x novae-angliae",
+"Elymus interruptus",
+"Ipomoea dumetorum",
+"Helianthus debilis subsp. tardiflorus",
+"Elymus glabriflorus var. glabriflorus",
+"Xanthosoma sagittifolium",
+#             "Juglans cinerea",
+"Prunus andersonii","Ribes quercetorum",
+"Gossypium hirsutum"
+# )
+
+######
+# species that had issues with redlist values 
+
+List <- c(  "Malus fusca", 
+            "Vaccinium uliginosum", 
+            "Leymus mollis",
+            "Vaccinium vitis-idaea", 
+            "Ribes triste", 
+            "Vigna luteola", 
+            "Gossypium hirsutum", 
+            "Vaccinium ovalifolium var. ovalifolium",
+            "Xanthosoma sagittifolium", 
+            "Psidium guajava", 
+            "Ipomoea cordatotriloba",  
+            "Ribes howellii",
+            "Acer saccharum subsp. ozarkense", 
+            "Oryza latifolia",
+            "Ipomoea dumetorum",
+            "Elymus trachycaulus",
+            "Elymus glaucus",
+            "Ipomoea leucantha",
+            "Juglans jamaicensis",
+            "Ribes aureum",
+            "Ribes lacustre",
+            "Vitis aestivalis var. linsecomii",
+            "Allium cernuum",
+            "Allium textile",
+            "Leymus x multiflorus",
+            "Leymus salina subsp. salina",
+            "Hordeum jubatum",
+            "Prunus emarginata",
+            "Leymus cinereus",
+            "Ribes cereum",
+            "Nicotiana obtusifolia",
+            "Leymus ambiguus",
+            "Leymus simplex",  
+            "Carya illinoinensis", 
+            "Leymus innovatus", 
+            "Leymus pacificus", 
+            "Lemus californicus", 
+            "Vaccinium scoparium",  
+            "Rubus ursinus",  
+            "Rubus spectabilis",
+            "Rubus orarius",  
+            "Rubus nutkanus", 
+            "Rubus hispidus var. obovalis", 
+            "Rubus chamaemorus",  
+            "Vaccinium crassifolium subsp. sempervirens", 
+            "Solanum xanti", 
+            "Daucus pusillus",  
+            "Fragaria vesca", 
+            "Dasiphora fruticosa", 
+            "Elymus canadensis", 
+            "Elymus glabriflorus", 
+            "Allium gooddingii", 
+            "Elymus glaucus subsp. glaucus",  
+            "Solanum douglasii",  
+            "Leymus salina", 
+            "Helianthus annuus", 
+            "Prunus virginiana var. demsa",
+            "Hordeum brachyantherum", 
+            "Elymus elymoides",
+            "Pseudoroegneria spicata",
+            "Juglans microcarpa",
+            "Allium bigelovii", 
+            "Vaccinium erythrocarpum subsp. erythrocarpum",
+            "Fragaria x ananassa", 
+            "Fragaria virginiana", 
+            "Juglans major",  
+            "Leymus mollis subsp. villosissimus",
+            "Tripsacum dactyloides", 
+            "Allium schoenoprasum subsp. schoenoprasum",
+            "Allium schoenoprasum", 
+            "Fragaria x bringhurstii", 
+            "Phaseolus leptostachyus var. leptostachyus", 
+            "Psidium longipes",  "Rubus abactus", 
+            "Saccharum brevibarbe var. brevibarbe", 
+            "Vaccinium crassifolium", 
+            "Vaccinium erythrocarpum",  
+            "Vaccinium ovalifolium",  
+            "Vanilla mexicana"
+            
+)
+
+D:/cwrNA/src/test/testingDataFromDifferentSources.R 
+
+
+
+march <- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-03-18.csv", header = TRUE)
+dim(march)
+april <- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-04-07.csv")
+april <- april[,2:ncol(april)]
+
+jan <- data.table::fread("D:/cwrNA/occurrence_data2019_05_29/combinedOccurance2020-01-11.csv",
+                         header = TRUE)
+
+
+lM <- march %>%
+  dplyr::filter(taxon == "Pseudoroegneria spicata")
+View(lM)
+lA <- april %>%
+  dplyr::filter(taxon == "Leymus californicus")
+View(lA)
+
+lJ <- jan %>%
+  dplyr::filter(taxon == "Pseudoroegneria spicata")
+View(lJ)
 D:/cwrNA/src/test/troubleshootingCounts.R 
+
+###
+# generating all summary data metrics 
+# 20200408 
+# dan.carver@carverd.com 
+### 
+
 
 # occurrence data from data prep step 
 d1 <- read.csv("D:/cwrNA/parameters/USA_cropWildRelativeInventory/CWRofUSA_Inventory_2020_02_26.csv", header = TRUE)
@@ -5547,8 +5676,8 @@ for(i in genera){
         gFAll <- dplyr::bind_rows(gFAll, gF)
       }
     }
-    if(file.exists(paste0(sp_dir, "/gap_analysis/redList/listingValues.csv"))){
-      rL <- read.csv(paste0(sp_dir, "/gap_analysis/redList/listingValues.csv"))
+    if(file.exists(paste0(sp_dir, "/gap_analysis/redList/listingValues4kmClean.csv"))){
+      rL <- read.csv(paste0(sp_dir, "/gap_analysis/redList/listingValues4kmClean.csv"))
       if(n==1){
         rlAll <- rL 
       }else{
@@ -5618,7 +5747,7 @@ allSummary$`Included in Summaries` <- !allSummary$species %in% noSS
 
 
 # change column names 
-allSummary <- allSummary %>% dplyr::select(-X, -Exsitu_Score)
+allSummary <- allSummary %>% dplyr::select(-Exsitu_Score)
 
 
 View(allSummary)
@@ -5637,24 +5766,42 @@ newCols <- c("Species",
  "Total occurrences in modeled area",	
  "Total occcurrens in modeled area in protected areas",
  "SRSin",	"GRSin",	"ERSin",	"FCSin", "Insitu Conservation Score",	
- "FCSex_value",	"FCSin_value",	"FCSc_min",	"FCSc_max",	"FCSc mean",
+ 
+ "FCSex_value",	"FCSin_value",	
+ 
+ "FCSc_min",	"FCSc_max",	"FCSc mean",
+ 
  "FCSc_min priority category",	"FCSc_max priority category",	
  "FCSc mean priority category",
+ 
  "EOO area km2", "EOO status",	"AOO",	"AOO adjusted minimum",	"AOO status",
  "Combined status", "Included in Summaries"
 )
 
 colnames(allSummary) <- newCols
 
-#write.csv(x = allSummary, file = paste0("D:/cwrNA/runSummaries/allMetricData", Sys.Date(), ".csv"))
+write.csv(x = allSummary, file = paste0("D:/cwrNA/runSummaries/allMetricData", Sys.Date(), ".csv"))
 
 
 # :) run from here
 
 # inport the CWR inventory and join the priority level and the crop type for futher summaries 
-cwrIn <- d1 %>% dplyr::select("Taxon_GRIN.Global_2019.final","Crop.or.WUS.use_general", "Priority.2019","Crop.or.WUS.use_1")
+cwrIn <- d1 %>% dplyr::select("Taxon_GRIN.Global_2019.final",
+                              "Crop.or.WUS.use_general", "Priority.2019",
+                              "Crop.or.WUS.use_1", 
+                              "Genus",
+                              "Associated_crop_common.name")
+colnames(cwrIn) <- c(
+  "name", 
+  "Associated crop type general",
+  "Category",
+  "Associated crop type specific",
+  "Genus",
+  "Associated crop"
+)
 
-cwrIn$name <- as.character(cwrIn$Taxon_GRIN.Global_2019.final) 
+
+cwrIn$name <- as.character(cwrIn$name) 
 useGroup <- dplyr::left_join(x = allSummary ,y= cwrIn, by= c("Species" = "name"))
 View(useGroup)
 # drop NA columns 
@@ -5664,6 +5811,21 @@ View(useGroup)
 ### adding the median model data to this data to double check true model runs for each species 
 allM <- read.csv("D:/cwrNA/runSummaries/median_summary_test20200203.csv")
 dt2 <- dplyr::left_join(useGroup, allM, by = c("Species" = "species"))
+
+
+### generate content for figures 
+dFig <- dt2[,c(1,42,43,44,45,14,15,16,17,18,21:33,35,36,38,39)]
+colnames(dFig) <- c("Taxon",	"Category",	"Associated crop type general",	"Associated crop type specific",
+"Genus",	"Associated crop",	"SRSex",	"GRSex",	"ERSex",	"FCSex",	"FCSex priority category",
+"SRSin",	"GRSin",	"ERSin",	"FCSin",	"FCSin priority category",
+"FCSex value",	"FCSin value",
+"FCSc_min",	"FCSc_max",	"FCSc mean",	"FCSc_min priority category",
+"FCSc_max priority category",	"FCSc mean priority category",	"EOO status",
+"AOO status",	"Combined threat assessment status")
+write.csv(x = dFig, file = paste0("D:/cwrNA/runSummaries/allMetricData_ForFigures", Sys.Date(), ".csv"))
+
+
+
 write.csv(x = dt2, file = paste0("D:/cwrNA/runSummaries/allMetricData_withRuns", Sys.Date(), ".csv"))
 
 
@@ -5709,236 +5871,3 @@ missingSpecies <- fullList[!fullList %in% spList2]
 
 # species present in occurence data that are not listed in CWR list 
 extraSpecies <- spList2[!spList2 %in% fullList]
-D:/cwrNA/src/test/uses_to_graph.R 
-
-#Maria Victoria Diaz Lopez
-#CIAT 2018
-
-################################### TO GRAPH ############################
-#Function to make a summary of the main priority (or comprehensiveness) indicators for each catgeorie of uses in the species
-
-# @param (string) priority: write P_LP_SC, P_MP, P_HP 
-# @param (string) component: write mean (or min, max), and exsitu and insitu 
-
-# @return (dataframe): This function return .csv file with the summary of the priority (or comprehensiveness) indicator for all uses
-
-####################### START ########################################
-
-
-
-uses<-function(...){
-
-  cat(paste0("Please select the folder with the uses indicators..."), "\n")
-  
-  setwd(paste0(root, "/indicator"))
-  
-  ind_dir<-paste0(root, "/indicator")
-  ind_us_dir<- jchoose.dir() 
-  
-  #date<-Sys.Date()
-  date <- readline(prompt="Date of the indicator's calculation YYYY-MM-D (i.e: 2019-04-24 )") 
-  #date<-"2019-04-24"
-  
-  
-  cat(paste0("Listing files ..."), "\n")
-  
-  
-  ind_uses1<-list.files(ind_us_dir,pattern = ".csv$",full.names = F)
-  ind_uses<-gsub("ind_","",ind_uses1)
-  ind_uses<-gsub(".csv","",ind_uses)
-
-  
-  warning("please write the priority levels in the order you want to see", immediate. = TRUE, noBreaks. = T)
-  
-  priority1 <- readline(prompt="write the first priority level you want to show: ") 
-  priority2 <- readline(prompt="write the second priority level you want to show: ") 
-  priority3 <- readline(prompt="write the third priority level you want to show: ") 
-  
-
-  priority<-c(priority1, priority2, priority3) ; rm(priority1, priority2, priority3)
-  
-  
-  warning("please write the three components in the order you want to see (ex: mean, exsitu, insitu)", immediate. = TRUE, noBreaks. = T)
-  
-  component1 <- readline(prompt="please write the first component you want to show: ") 
-  component2 <- readline(prompt="please write the second component you want to show: ") 
-  component3 <- readline(prompt="please write the third component you want to show: ") 
-  
-
-  component<-c(component1, component2, component3) ; rm(component1, component2, component3)
-  
-for_uses<-lapply(1:length(ind_uses), function(j){ 
-  
-opt_list<-  lapply(1:length(component), function(i){
-    
-    
-    feature<- ifelse(component[i] == "min", 1,
-                     ifelse(component[i] == "max", 2, 
-                            ifelse(component[i] == "mean", 3,
-                                   ifelse(component[i] == "exsitu", 4,
-                                          ifelse(component[i] == "insitu", 5, NA
-                                          )))))
-    
-    cat(paste0("Organizing indicator values per uses"), "\n")
-    
-    
-      u<-read.csv(paste0(ind_us_dir,"/",ind_uses1[j]),header=T)
-      u<-u[feature,priority]
-      u<-as.data.frame(cbind(as.character(ind_uses[j]),u))
-      colnames(u)<-c("Uses",priority)
-      
-      
-     
-      
-      
-      cat(paste0("Preparing the json file for ", component[i]), "\n")
-      
-      
-      first_row <- data.frame("['',", as.numeric(0), ",'',", as.numeric(0), ",'',", as.numeric(0), ",''],", stringsAsFactors=FALSE)
-     
-      d<-gsub(u[1,2], paste0(u[1,2],","), u[1,2])
-      c<-gsub(u[1,3], paste0(u[1,3],","), u[1,3])
-      b<-gsub(u[1,4], paste0(u[1,4],","), u[1,4])
-      
-      
-      
-      if(component[i] == "mean"){
-        
-  
-        a<-gsub(u$Uses, paste0("['",u$Uses,"',"), u$Uses)
-           
-        
-        col_1<- "'bar {'+'stroke-width: 10;' +'stroke-color: #E54D24}'],"
-        col_2<- "'bar {'+'stroke-width: 10;' +'stroke-color: #F0CB69}',"
-        col_3<- "'bar {'+'stroke-width: 10;' +'stroke-color: #12A356}',"
-        
-        opt_list<-data.frame(a,d,col_3,c, col_2, b, col_1, stringsAsFactors=FALSE)
-
-        colnames(first_row)<-colnames(opt_list)
-        
-        opt_list<-rbind(first_row, opt_list, first_row, first_row)
-        
-        
-      
-      
-      }else{
-        
-         
-        col_1<- "'',"
-        col_2<- "'',"
-        col_3<- "''],"
-        
-      if(component[i] == "exsitu"){
-        
-        
-        a<-gsub(u$Uses, paste0("['",u$Uses," ex situ',"), u$Uses)
-          
-        opt_list<-data.frame(a,d,col_1,c, col_2, b, col_3, stringsAsFactors=FALSE)
-        
-        colnames(first_row)<-colnames(opt_list)
-        
-        opt_list<-rbind(opt_list, first_row)
-        
-        
-      } else{
-        
-        a<-gsub(u$Uses, paste0("['",u$Uses," in situ',"), u$Uses)
-        
-        opt_list<-data.frame(a,d,col_1,c, col_2, b, col_3, stringsAsFactors=FALSE)
-        
-        colnames(first_row)<-colnames(opt_list)
-        
-        opt_list<-rbind(opt_list, first_row, first_row, first_row)
-        
-        
-      }
-      
-      
-      }
-      
-      colnames(opt_list)<-c("var data=[['uses',", " 'Low Priority and Sufficiently Conserved',","{ role: 'style' },","'Medium Priority', ","{ role: 'style' },","'High Priority',", " { role: 'style' }],")
-      
-      rm(a,b,c,d,col_1,col_2,col_3, first_row)
-      
-
-      for_csv<-u
-      for_js<-opt_list
-      
-      
-      return(list(JS = for_js, CSV = for_csv))
-      
-    
-  })
-
-
-JS<-do.call(rbind, list(opt_list[[1]]$JS, opt_list[[2]]$JS, opt_list[[3]]$JS))
-
-CSV<-list(mean = opt_list[[1]]$CSV, exsitu = opt_list[[2]]$CSV, insitu = opt_list[[3]]$CSV)
-
-X<-list(JS = JS,CSV = CSV)
-
-return(X)
-
-})
-
-
-
-
-for(k in 1:length(component)){
-  
-  
-  if(!file.exists(paste0(ind_dir,"/uses/to_graph/",date))){ dir.create(paste0(ind_dir,"/uses/to_graph/",date))}
-  if(!file.exists(paste0(ind_dir,"/uses/to_graph/",date, "/", component[k]))){dir.create(paste0(ind_dir,"/uses/to_graph/",date, "/", component[k]))}
-  
-  
-  
-  CSV<-lapply(1:length(for_uses), function(h){
-    
-    
-    CSV<-for_uses[[h]][[2]][[which(names(for_uses[[h]][[2]]) %in% component[k])]]
-    
-    return(CSV)
-    
-  })
-  
-  
-  CSV<-do.call(rbind, CSV)
-  
-  cat(paste0("Writing the csv file"), "\n")
-  
-  
-  write.csv(CSV,paste0(ind_dir,"/uses/to_graph/",date, "/", component[k],"/indicator",".csv"),row.names=F,quote=F,na="")
-  
-  
-  
-
-  JS<-lapply(1:length(for_uses), function(h){
-    
-    
-    JS<-for_uses[[h]][[1]]
-    
-    return(JS)
-    
-  })
-  
-  
-  JS<-do.call(rbind, JS)
-  JS[nrow(JS),ncol(JS)]<-gsub("],", "]];", JS[nrow(JS),ncol(JS)])
-  
-  
-  
-  cat(paste0("Writing the json file"), "\n")
-  
-  
-  write.table(JS,paste0(ind_dir,"/uses/to_graph/",date, "/combined_indicator", ".js"),row.names=F,quote=F,na="")
-  
-  
-  
-}
-
-
-
-
-}
-
-

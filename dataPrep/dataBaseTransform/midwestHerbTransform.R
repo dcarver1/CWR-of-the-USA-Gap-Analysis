@@ -8,11 +8,24 @@ library(tidyverse)
 library(data.table)
 
 #set base dir
-base_dir <- "D:/cwrNA/occurrence_data2019_05_29/Midwest_herbaria/SymbOutput_2019-05-28_151547_DwC-A"
+base_dir <- "F:/nrelD/cwrNA/occurrence_data2019_05_29/Midwest_herbaria/SymbOutput_2019-05-28_151547_DwC-A"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/occurrences.csv")
 data <- data.table::fread(csvPath, header = TRUE)
+
+# # sumarries data with lat long by year 
+# o1 <- data %>%
+#   dplyr::filter(!is.na(decimalLatitude))%>%
+#   dplyr::filter(year == 1900)
+# 
+# %>%
+#   dplyr::group_by(year)%>%
+#   dplyr::summarise(count = n())
+# View(o1)
+# write.csv(o1,file = paste0(base_dir, "/1900examples.csv"))
+# 
+
 # Select necessary columns from dataset 
 dataThin <- data %>%
   select("id","institutionCode", "basisOfRecord","occurrenceID",

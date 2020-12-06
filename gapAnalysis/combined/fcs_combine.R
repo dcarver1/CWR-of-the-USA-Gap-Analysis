@@ -22,35 +22,35 @@ fcs_combine <- function(species) {
   
   #assign classes (min)
   if (data_comb$FCSc_min < 25) {
-    data_comb$FCSc_min_class <- "HP"
+    data_comb$FCSc_min_class <- "UP"
   } else if (data_comb$FCSc_min >= 25 & data_comb$FCSc_min < 50) {
-    data_comb$FCSc_min_class <- "MP"
+    data_comb$FCSc_min_class <- "HP"
   } else if (data_comb$FCSc_min >= 50 & data_comb$FCSc_min < 75) {
-    data_comb$FCSc_min_class <- "LP"
+    data_comb$FCSc_min_class <- "MP"
   } else {
-    data_comb$FCSc_min_class <- "SC"
+    data_comb$FCSc_min_class <- "LP"
   }
   
   #assign classes (max)
   if (data_comb$FCSc_max < 25) {
-    data_comb$FCSc_max_class <- "HP"
+    data_comb$FCSc_max_class <- "UP"
   } else if (data_comb$FCSc_max >= 25 & data_comb$FCSc_max < 50) {
-    data_comb$FCSc_max_class <- "MP"
+    data_comb$FCSc_max_class <- "HP"
   } else if (data_comb$FCSc_max >= 50 & data_comb$FCSc_max < 75) {
-    data_comb$FCSc_max_class <- "LP"
+    data_comb$FCSc_max_class <- "MP"
   } else {
-    data_comb$FCSc_max_class <- "SC"
+    data_comb$FCSc_max_class <- "LP"
   }
   
   #assign classes (mean)
   if (data_comb$FCSc_mean < 25) {
-    data_comb$FCSc_mean_class <- "HP"
+    data_comb$FCSc_mean_class <- "UP"
   } else if (data_comb$FCSc_mean >= 25 & data_comb$FCSc_mean < 50) {
-    data_comb$FCSc_mean_class <- "MP"
+    data_comb$FCSc_mean_class <- "HP"
   } else if (data_comb$FCSc_mean >= 50 & data_comb$FCSc_mean < 75) {
-    data_comb$FCSc_mean_class <- "LP"
+    data_comb$FCSc_mean_class <- "MP"
   } else {
-    data_comb$FCSc_mean_class <- "SC"
+    data_comb$FCSc_mean_class <- "LP"
   }
   
   #create output directory if it doesnt exist

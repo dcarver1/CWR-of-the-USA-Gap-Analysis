@@ -1,6 +1,6 @@
 ---
-title: Summary of Maxnet modeling and conservation gap analysis results per taxon
-author: Colin Khoury, Daniel Carver
+title: Taxon level modeling, preliminary threat assessment, and conservation gap analysis summary
+author: Daniel P. Carver and Colin K. Khoury 
 output:
   html_document:
   code_folding: hide
@@ -12,62 +12,146 @@ toc_float:
   collapsed: yes
 smooth_scroll: yes
 ---
-
+<br>
+<br>
+<br>
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-# function for flitering list based on character values
+# function for filtering list based on character values
 include <- function (theList, toMatch){
   matches <- unique (grep(paste(toMatch,collapse="|"),
                           theList, value=TRUE))
   return(matches)
 }
+
+round_df <- function(x, digits) {
+    # round all numeric variables
+    # x: data frame 
+    # digits: number of digits to round
+    # select all numeric columns 
+    for(i in 1:ncol(x)){
+      if(class(x[,i])=="numeric"){
+        x[i] <-  round(x[i], digits)
+      }
+    }
+    #This works
+    return(x)
+}
+digits <- 2
+
+#function for generating counts data based on modeled native occurrence area 
+  counts <- function(dat){
+     dataThin <<- dat %>%
+      dplyr::select(c("taxon", "latitude", "longitude", "type")) %>%
+      mutate(hasLat = !is.na(latitude) & latitude != "\\N" & latitude != "") %>%
+      mutate(hasLong = !is.na(longitude) & longitude != "\\N"& longitude != "") %>%
+      mutate(hasLatLong = hasLat & hasLong)
+     
+         
+    colNames <- c("species","totalRecords",	"hasLat", "hasLong","totalUseful", 	"totalGRecords",
+                  "totalGUseful","totalHRecords",	"totalHUseful" )
+    noNas <- dataThin[complete.cases(dataThin),]
+    tbl <- noNas %>%
+      dplyr::group_by(type, hasLatLong ) %>%
+      dplyr::summarize(total = n())
+    
+    df <- data.frame(matrix(NA, nrow = 1, ncol = 10))
+    colnames(df) <- colNames
+    df$species <- unique(dataThin$taxon)
+    df$totalRecords <- nrow(dataThin)
+    df$totalUseful <- sum((subset(tbl, hasLatLong == TRUE))$total)
+    df$totalGRecords <- sum((subset(tbl, type == "G"))$total)
+    df$totalGUseful <- sum((subset(tbl, type == "G" & hasLatLong == TRUE))$total)
+    df$totalHRecords <- sum((subset(tbl, type == "H"))$total)
+    df$totalHUseful <- sum((subset(tbl, type == "H" & hasLatLong == TRUE))$total)
+    df$hasLat <- sum(dataThin$hasLat)
+    df$hasLong <- sum(dataThin$hasLong)
+    return(df)
+
+  }
+
+# Palette options 
+hPColor <- "#1184D4"
+gPColor <- "#6300F0"
+# background ecoregions = "#FFFFFF"
+# predicted presence = "#45B320"
+binaryPal <- c( "#FFFFFF","#45B320") # white, green 
+gBufPal <- c(  "#FFFFFF","#45B320","#7570b3") # white , green, purple 
+gBinary <- c("#FFFFFF","#7570b3") # White, Purple 
+ecoPal <- "RdYlBu" # https://colorbrewer2.org/#type=diverging&scheme=RdBu&n=3
+proPal <- "#7570b3" # same color as val 2 in gBufPal 
+srsinPal <- c("#FFFFFF", "#FA4101") # white to red 
 ```
 
-## Summary of the models for `r species`.
+## Summary for `r species`
 
-The table below shows a summary of the counts for the important categories in the data. A useful record is one that has a complete set of latitude and longitude coordinates associated with it. 
+The table below shows a summary of the occurrence records for the taxon. A record "with coordinates" is one that has a complete set of latitude and longitude values associated with it, which could be used for distribution modeling, the preliminary threat assessment, and the conservation gap analysis. For this analysis, such records with coordinates were confined to those falling within the target native area, i.e. native states/administrative areas within the United States (including its territories), Canada, Mexico, and the Caribbean islands, as listed per taxon in USDA ARS GRIN Global Taxonomy (2020). In preparation for the conservation gap analyses, we classified each record based on whether it was an existing ex situ sample from a genebank or botanic garden (labeled G, as most records were from genebanks), or a reference observation (labeled H, as most of these records were from herbaria).
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # taxa is the
 
 baseDir <- paste0(sp_dir)
+
 csv <- list.files(baseDir, pattern = ".csv", recursive = TRUE , full.names = TRUE)
+
 if (file.exists(paste0(baseDir,'/counts.csv'))){
-  counts <- as.data.frame(read.csv(paste0(baseDir,'/counts.csv'))) %>%
-    dplyr::select(c("totalRecords", "totalUseful", "totalGRecords", "totalGUseful","totalHRecords", "totalHUseful"))
-  colnames(counts) <- c("Total Records", "Total Useful", "Total G Records", "Total G Useful","Total H Records", "Total H Useful")
-}else{
-  print("There are no samples present for this species")
+    c1a <- as.data.frame(read.csv(paste0(baseDir,'/counts.csv')))
+    }else{
+      print("There are no occurrences present for this taxon")
+      }
+
+### replace counts csv with clean points 
+if(length(include(csv,"eval_metrics_rep.csv")) != 0){
+  d1 <- try(read.csv(paste0(sp_dir, "/cleanedModelingData.csv")))
+  d2 <- try(d1[,c(3,2)])
+  cleanPoints <- try(sp::SpatialPointsDataFrame(coords = d2, data = d1[,1:8]))
+  cleanPoints$type <- as.factor(cleanPoints$type)
+  #d1 <- cbind(d1, c1a)
+  c1 <- counts(d1) 
+  c1$TotalRecords <- c1a$totalRecords
+  c1 <- c1 %>% dplyr::select(c("totalRecords","totalUseful", "totalGUseful", "totalHUseful"))
+  colnames(c1) <- c("Total records" ,"Total with coordinates",  "Total G with coordinates", "Total H with coordinates")
+  c1 <- round_df(c1)
+
 }
-DT::datatable(counts)
+
+c1a2 <- round_df(c1a)%>%
+      dplyr::select(c("totalRecords","NA_occurrences", "NA_GUseful", "NA_HUseful"))
+
+colnames(c1a2) <- c("Total Records","Total with coordinates", "Total G with coordinates", "Total H with coordinates")
+DT::datatable(c1a2)
 ```
 <br>
 <br>
 <br>
   
-### Predictors Used in Modeling Process 
-The table below shows the variables listed in order of importance. As correlated variables were removed, the “Included in the Modeling Process” column defines if the variable was used in the final modeling process.  
+### Predictors used in modeling process 
+The table below shows the ecogeographic variables listed in order of importance based on the occurrence dataset, including whether or not they were used for distribution modeling, following the variable selection process.  
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"predictorImportance.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
   t2 <- read.csv(include(csv,"predictorImportance.csv"))
   t2 <- dplyr::left_join(x = t2, y= layerDescription, by = c("varNames" = "layer"))
   t2 <- t2 %>% dplyr::select("varNames","description" ,"importance","includeInFinal","source")
-    colnames(t2) <- c("Variable Name", "Description", "Relative Importance to Model", "Included in the Modeling Process", "Data Source")
+    colnames(t2) <- c("Variable name", "Description", "Relative importance to model", "Included in the modeling process", "Data source")
+  t2 <- round_df(x = t2, digits = digits)
   DT::datatable(t2)
 }
 ```
+<br>
+<br>
+<br>
 
 ### Evaluation metrics
-To account for random variation occurring during modeling, the process was run ten times (K=10) for all species with more than 25 points. Species with more than 10 but less than 25 occurrences were run six times, and those with < 10 were modeled three times. The table below shows the statistical results for each run.
+For each taxon with at least 25 distinct coordinates in the target spatial area, the modeled distribution was calculated as the median of ten MaxEnt model replicates (K = 10), using linear, quadratic, product, and hinge features, with a regularization parameter ß=1.0. For taxa with 8-24 distinct coordinates, the median of six replicates (K = 6) was calculated, and for taxa with 3-7 distinct coordinates, the median of three replicates (K = 3) was calculated. Model runs for taxa where MaxEnt failed within these established groupings were rerun in fewer replicate categories. Taxa with fewer than 3 distinct coordinates were not modeled. The table below shows the statistical results for each replicate.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("No models were produced for this species due to insufficent number of samples")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
   # evalMetric <- include(csvs,"eval_metrics_rep.csv")
-  modeledData <- read.csv(include(csv, "presBackgroundWithBiovars.csv"))
+  modeledData <- read.csv(include(csv, "bioValuesForPresencePoints.csv"))
   totalVals <- nrow(modeledData)
   eval <- read.csv(include(csv,"eval_metrics_rep.csv"))
   kfold <- nrow(eval)
@@ -80,7 +164,7 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
     testing <- round(totalVals * 0.17, 0)
   }
   if(kfold == 3){
-    training <- round(totalVals * 0.67, 0)
+      training <- round(totalVals * 0.67, 0)
     testing <- round(totalVals * 0.33, 0)
   }
   
@@ -94,9 +178,10 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
   eval <- eval %>% 
     dplyr::select("Species" , "Training", "Testing","Background + Training", "AUCtrain", "sensi_train","speci_train","threshold_train", "max.TSS_train","minROCdist_train","method_train", "AUCtest","threshold_test","sensi_test"       , "speci_test","matthews.cor_test", "LR_pos_test"      
 , "LR_neg_test","kappa_index_test" )
-  colnames(eval) <- c("Species" , "Training", "Testing", "Background + Training", "AUC Train", "Sensitivity Train","Specificity Train","Threshold Train", "Maximun TSS Train","Minimun ROC Distance Train","Threshold Method Train", "AUC Test","Threshold Test","Sensitivity Test"       
+  colnames(eval) <- c("Taxon" , "Training", "Testing", "Background + Training", "AUC Train", "Sensitivity Train","Specificity Train","Threshold Train", "Maximun TSS Train","Minimun ROC Distance Train","Threshold Method Train", "AUC Test","Threshold Test","Sensitivity Test"       
 , "Specificity Test","Matthews Correlation Test", "LR_pos_test"      
 , "LR_neg_test","kappa_index_test" )
+  eval<- round_df(eval, digits = digits)
   DT::datatable(eval)
 }
 ```
@@ -105,12 +190,12 @@ if(length(include(csv,"eval_metrics_rep.csv")) == 0){
 <br>
 
   
-### Statistics for Median of the Model Runs
-The median result across the replicates is shown below. Per previous articles we have done, to be considered an accurate and stable model, we are looking for an AUC >= 0.7; SDAUC < 0.15; and ASD15 <= 10
+### Statistics for median of the model runs
+The median result across the replicates is shown below. To be considered an accurate and stable model (see the field "Valid"), we are looking for an AUC >= 0.7; SDAUC < 0.15; and ASD15 <= 10.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
   # evalMetric <- include(csvs,"eval_metrics_rep.csv")
   eval2 <- read.csv(include(csv,"eval_metrics.csv"))
@@ -122,7 +207,8 @@ if(length(include(csv,"eval_metrics.csv")) == 0){
   eval2$`Background + Training` <- testing + training
   eval2 <- eval2 %>%
     dplyr::select(species,Training,Testing, `Background + Training`,ATAUC, STAUC, ASD15, VALID)
-  colnames(eval2) <- c("Species","Training", "Testing", "Background + Training", "AUC","SDAUC","ASD15", "Valid")
+  colnames(eval2) <- c("Taxon","Training", "Testing", "Background + Training", "AUC","SDAUC","ASD15", "Valid")
+  eval2 <- round_df(x = eval2, digits = digits)
   DT::datatable(eval2)
 }
 ```
@@ -133,208 +219,479 @@ if(length(include(csv,"eval_metrics.csv")) == 0){
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
   tif <- list.files(path = baseDir, pattern = '.tif', recursive = TRUE, full.names = TRUE)
       median <- raster(include(tif, "prj_median"))
       thrshold <- raster(include(tif, "spdist_thrsld_median"))
       sd <- raster(include(tif, "prj_std"))
-      mess <- raster(include(tif, "messMapThres"))
+      mess <- try(raster(include(tif, "messMapThres")))
       kDense <- try(raster(include(tif, "kernalDensity")))
     }
 tmap_mode("view")
-tmap_options(basemaps = "OpenStreetMap")
 ```
 
-### Maps of model outputs.
 
+
+
+### Maps of model outputs
+<br>
 
 #### Median
 
-The map below shows the median spatial result from the maxent model runs. Values in the key refer to the probability of occurrence. The occurrences used in the modeling process are represented by black dots and the attribute data associated with the points can be viewed by clicking on the dots.
+The map below shows the median spatial result from the species distribution model runs. Values in the key refer to the probability of occurrence. The occurrences used in the modeling process are represented by dots, distinguishing between G and H records (as available), and the attribute data associated with the points can be viewed by clicking on the dots. The background shows the target native area (i.e. the occupied native country-ecoregion area).
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
-  tm_shape(median) + tm_raster()+
-    tm_shape(cleanPoints) + tm_dots()+
-    tm_scale_bar() 
+  # split the g and h values into different points 
+      gP <- cleanPoints[cleanPoints$type == "G",]
+    hP <- cleanPoints[cleanPoints$type == "H",]
+  if(length(unique(cleanPoints$type)) >1){
+  tm_shape(median, name = "Probability model") + tm_raster(title = paste0("Model probability for ",species))+
+    tm_shape(cleanPoints, name = "All Occurrences")+ 
+    tm_dots(col = "type",palette=c(H="#1184D4", G='#6300F0'))+
+  tm_shape(hP, name = "H Occurrences")+
+    tm_dots(col = hPColor)+
+  tm_shape(gP, name = "G Occurrences")+ 
+    tm_dots(col = gPColor) 
+  
+  }else{
+    if(nrow(hP)==0){
+    tm_shape(median, name = "Probability model") + tm_raster(title = paste0("Model probability for ",species))+
+    tm_shape(cleanPoints, name = "All Occurrences")+ 
+    tm_dots(col = "type",palette=c(G='#6300F0'))+
+  tm_shape(gP, name = "G Occurrences")+ 
+    tm_dots(col = gPColor) 
+    }else{
+          hP <- cleanPoints[cleanPoints$type == "H",]
+  tm_shape(median, name = "Probability model") + tm_raster(title = paste0("Model probability for ",species))+
+    tm_shape(cleanPoints, name = "All Occurrences")+ 
+    tm_dots(col = "type",palette=c(H="#1184D4", G='#6300F0'))+
+  tm_shape(hP, name = "H Occurrences")+
+    tm_dots(col = hPColor)
+    }
+  }
 }
 ```
 
 <br>
 
   
-#### Standard Deviation
-Map of the standard deviation result across maxent model runs. Areas with a high standard deviation imply a limited agreement between the runs. This is most likely to occur in areas with low sample (occurrence point) density.
+#### Standard deviation
+The map below shows the standard deviation result across species distribution model replicates. Areas with a high standard deviation imply a limited agreement between the replicates. This is most likely to occur in areas with low sample (occurrence point) density.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were produced for this taxon due to insufficent occurrences")
 }else{
-  qtm(shp = sd)
+  tm_shape(sd, name = "Standard deviation")+
+    tm_raster(title = paste0("Standard deviation of model for ",species))
 }
 ```
 
 <br>
   
   
-#### Threshold
-Map of the threshold (binary presence-absence) result from the maxent models. This is the map used to create the genus level predicted species richness map.
+#### Threshold (final species distribution model)
+The map below shows the threshold (binary presence-absence) result from the species distribution modeling. This is the map used to perform the conservation gap analyses and to create the richness maps across taxa. The background shows the target native area (i.e. the occupied native country-ecoregion area). Predicted presence is displayed in green.
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were produced for this taxon due to insufficent occurrences")
 }else{
-  palette1 <- c(  "#FFFFFF","#45B320")
-  tm_shape(thrshold) + tm_raster(palette=palette1)+
-    tm_scale_bar() 
+  palette1 <- c("#FFFFFF","#45B320")
+  tm_shape(thrshold, name = "Distribution model") + tm_raster(palette=palette1,style = "cat",
+                                 title = paste0("Predicted presence of ", species))
 }
 ```
 
-#### Mess Map
-The mess map identifies regions of the model that over project the top predictor. That is, areas of predicted presences that are above or below the observed range of the values assocaited with known occurrence data. There is less confidence that these areas are part of the distribution of the species because they are beyond the know conditions at what the species has been observed.
-Areas with value 0 equal species potential range.
-Areas with value 1 are regions that are potential over projected.
-Areas with value 2 are predicted presences locations within the know environmental limit of the species. 
+<!-- #### Mess Map -->
+<!-- The mess map identifies regions of the model that over project the top predictor. That is, areas of predicted presences that are above or below the observed range of the values assocaited with known occurrence data. There is less confidence that these areas are part of the distribution of the species because they are beyond the know conditions at what the species has been observed. -->
+<!-- Areas with value 0 equal species potential range. -->
+<!-- Areas with value 1 are regions that are potential over projected. -->
+<!-- Areas with value 2 are predicted presences locations within the know environmental limit of the species.  -->
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
-}else{
-  mess[is.na(mess)] <- 0
-  mess1 <- mess + thrshold
-  palette1 <- c(  "#FFFFFF","#8c19b5", "#45B320")
-  tm_shape(mess1) + tm_raster(palette=palette1)+
-    tm_scale_bar() 
-  
-  
-}
+# if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+#   print("Models were not produced for this taxon due to insufficent occurrences")
+# }else{
+#   mess[is.na(mess)] <- 0
+#   mess1 <- mess + thrshold
+#   palette1 <- c(  "#FFFFFF","#8c19b5", "#45B320")
+#   tm_shape(mess1) + tm_raster(palette=palette1)+
+#     tm_scale_bar() 
+#   
+#   
+# }
 ```
 
-#### Density of Sampling locations 
-The map below show the relative concentration of occurence data across the predicted suitable habitat for the species. 
+<!-- #### Density of Sampling locations  -->
+<!-- The map below show the relative concentration of occurence data across the predicted suitable habitat for the species.  -->
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(length(include(tif, "kernalDensity")) == 0){
-  print("No kernal density raster was generated for this species")
-}else{
-  th2 <- thrshold
-  th2[th2 == 0] <- NA
-  kd1 <- kDense * th2
-  tm_shape(kd1) + tm_raster()+
-    tm_scale_bar() 
-}
+# if(length(include(tif, "kernalDensity")) == 0){
+#   print("No kernal density raster was generated for this species")
+# }else{
+#   th2 <- thrshold
+#   th2[th2 == 0] <- NA
+#   kd1 <- kDense * th2
+#   tm_shape(kd1) + tm_raster()+
+#     tm_scale_bar() 
+# }
 ```
+<br>
+<br>
+<br>
+
+
+### Preliminary threat assessment
+We calculated the extent of occurrence (EOO) and area of occupancy (AOO), adapted from the IUCN Red List criteria (AOO cell size 4 km2), using the occurrence data with coordinates in the native area of the taxon. Taxa are classified per metric and in combination, as Critically Endangered (CR) where EOO < 100 km2 or AOO < 10 km2, Endangered (EN) where 100 km2 < EOO < 5000 km2 or 10 km2 < AOO < 500 km2, Vulnerable (VU) where 5000 km2 < EOO < 20,000 km2 or 500 km2 < AOO < 2000 km2, Possible Near Threatened (NT) where 20,000 km2 > EOO < 45,000 km2 or 2000 km2 < AOO < 4500 km2, and Least Concern (LC) where EOO ≥ 45,000 km2 and AOO ≥ 4500 km2. Taxa with fewer than three distinct coordinates were automatically classified as CR. 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+if(c1a2$`Total with coordinates`> 2){
+  if(file.exists(paste0(baseDir,"/gap_analysis/redList/listingValues4kmClean.csv"))){
+    rl <- read.csv(paste0(baseDir,"/gap_analysis/redList/listingValues4kmClean.csv")) 
+
+rl <- rl[,c(2,3,4,5,7,8)]
+colnames(rl) <- c("Taxon", "EOO area in km2", "EOO status", "AOO area in km2", "AOO status", "Combined status")
+rl <- round_df(rl, digits = digits)
+DT::datatable(rl)
+}else{
+  print("There are less then two records for this species and the EOO and AOO assessments were unable to be completed.")
+}
+}else{
+    print("Unable to complete the redlist assessment on this speices")
+  }
+  
+
+```
+
+<br>
+<br>
+<br>
 
 ### Conservation gap analysis
+<br>
 
-#### Ex situ Conservation
+#### Ex situ conservation
 
-The table below shows the ex situ conservation summary. SRSex is a gross comparison of germplasm (G) and reference (H) records. GRSex analyzes how comprehensively the G records cover the maxent model spatially. ERSex analyzes how well the G records cover the maxent model with regard to ecosystems covered. 
-All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final ex situ conservation score is called FCSex and is a mean of the three ex situ conservation scores.
+The table below shows the ex situ conservation gap analysis summary. The sampling representativeness score ex situ (SRSex) calculates the ratio of germplasm accessions (G) available in ex situ repositories to reference (H) records for each taxon, making use of all compiled records, regardless of whether they include coordinates. The geographical representativeness score ex situ (GRSex) uses buffers of 50 km radius created around each G collection coordinate point to estimate geographic areas already well collected within the distribution models of each taxon, and then calculates the proportion of the distribution model covered by these buffers. The ecological representativeness score ex situ (ERSex) calculates the proportion of terrestrial ecoregions represented within the G buffered areas out of the total number of ecoregions occupied by the distribution model. A final conservation score for ex situ (FCSex) was derived by calculating the average of the three ex situ conservation metrics. All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = comprehensive protection. The FCSex is used to categorize species, with urgent priority (UP) for further conservation action assigned when FCSex < 25, high priority (HP) where 25 ≤ FCSex < 50, medium priority (MP) where 50 ≤ FCSex < 75, and low priority (LP) for taxa whose FCSex ≥75.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # exSummary <- include(csv, "exsitu/summary.csv")
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("There are no G points present so this process could not be completed.")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
-tableEx <- dplyr::bind_cols(counts, read.csv(include(csv, "exsitu/summary.csv")))
-tableEx <- tableEx[c(7,1,2,3,4,5,6,8,9,10, 11)]
-names(tableEx) <- c("ID","Total Records","Total Useful","Total G Records", 
-                    "Total G Useful","Total H Records","Total H Useful","SRSex", "GRSex","ERSex","FCSex")
+tableEx <- dplyr::bind_cols(c1a, read.csv(include(csv, "exsitu/summary.csv")))
+
+tableEx <- tableEx[c(1,14,15,16,6,8,18,19,20,21, 22)]
+names(tableEx) <- c("Taxon","Total with coordinates","Total G with coordinates","Total H with coordinates","Total G records","Total H records","SRSex", "GRSex","ERSex","FCSex","FCSex priority category")
+tableEx <- round_df(tableEx, digits = digits)
 DT::datatable(tableEx)
 }
 ```
+
 <br>
 <br>
 <br>
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(counts$`Total G Useful` == 0){
-  print("There are no G points present so this process could not be completed.")
-}else{
-  # pull in all g points.
-  #No idea why this is not working, going back to old indexing
-  # %>%   filter(type == "G")
-  occList <- cleanPoints[which(cleanPoints$type == "G"),]
-  if(nrow(occList) != 0){
-    sp = sp::SpatialPoints(occList[,c("longitude", "latitude")])
-   gapRaster <- raster(include(tif, "ga50"))
-   gapRaster2 <- raster(include(tif, "grs_pa_PAs_narea_areakm2"))
-   gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
-   collgap1 <- thrshold + gapRaster
-   GRSin <- thrshold + gapRaster2
-  }else{
-print("There are no G points present so this process could not be completed.")
-  } 
-}
+# if(!c1a2$`Total G with coordinates` == 0 & !length(include(csv,"eval_metrics_rep.csv")) == 0){
+#   # pull in all g points.
+#   #No idea why this is not working, going back to old indexing
+#   # %>%   filter(type == "G")
+#   occList <- cleanPoints[which(cleanPoints$type == "G"),]
+#   if(nrow(occList) != 0){
+#     sp = sp::SpatialPoints(occList[,c("longitude", "latitude")])
+#    gapRaster <- raster(include(tif, "ga50"))
+#    gapRaster2 <- raster(include(tif, "grs_pa_PAs_narea_areakm2"))
+#    gapRaster2a <- gapRaster2[is.na(gapRaster2)] <- 0
+#    collgap1 <- thrshold + gapRaster
+#    GRSin <- thrshold + gapRaster2
+#   }
+# }
+
+```
     
+
+#### Map of ex situ geographical representativeness (GRSex)
+The map below shows the potential distribution (threshold map), with previous germplasm collection points surrounded by a 50 km buffer overlaid. Only germplasm (G) points are displayed on the map.
+
+0 = Native area (area of ecoregions within countries where taxon has been observed in the field)
+
+1 = Potential distribution
+
+2 = G buffer (area where ex situ conservation is considered to have been accomplished)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+#   print("Models were not produced for this taxon due to insufficent occurrences")
+#   }else{
+#   occList <- cleanPoints[which(cleanPoints$type == "G"),]
+#   if(nrow(occList) == 0){
+#     tm_shape(thrshold, name = "Distribution model") +
+#       tm_raster(palette = binaryPal, style = "cat", 
+#                 title = paste0("GRSex of ",species))
+#     
+#     }else{ 
+#       gPoint <- cleanPoints[cleanPoints@data$type == "G",]
+#     if(length(gPoint@data)>0){
+#       ## this is bad!!!, try to change 
+#       thes1 <- thrshold 
+#       thes1[thes1==0]<-NA 
+#       bufferInThres <- collgap1 * thes1
+#       bufferInThres[is.na(bufferInThres)]<-0
+#       bufferInThres[bufferInThres==2] <- 1
+#       comb2 <-  bufferInThres + thrshold
+#       gGaps <- thrshold - bufferInThres 
+#       # writeRaster(x = gGaps, filename = paste0(sp_dir,'/gap_analysis/exsitu/gapMap.tif'),overwrite=TRUE)
+#       # condition for non 100% GRSex 
+#     if(1 %in% unique(values(comb2))){
+#           tm_shape(comb2, name = "Native area, distribution model, and G buffers") + 
+#       tm_raster(palette = gBufPal, style = "cat", 
+#                 title = paste0("GRSex of ", species))+
+#     tm_shape(gPoint, name = "G occurrences") + tm_dots(col = gPColor)+
+#       tm_scale_bar()
+#     }else{
+#     tm_shape(comb2, name = "Native area, distribution model, and G buffers") + 
+#       tm_raster(palette = gBinary, style = "cat", 
+#                 title = paste0("GRSex of ", species))+
+#     tm_shape(gPoint, name = "G occurrences") + tm_dots(col = gPColor)+
+#       tm_scale_bar()
+#     }
+# 
+#     }
+#   }
+# }
+
 ```
 
-#### GRSex
-Map of the potential distribution, with previous germplasm collection points surrounded by a 50 km buffer overlaid. Only germplasm points are displayed on the map.
+<br>
+<br>
+<br>
 
-Areas of Native Range = 0
 
-Potential Distribution = 1
+#### Map of ex situ ecological representativeness (ERSex)
 
-Area Where samples have been collected = 2
+The map below shows the potential distribution, highlighting ecoregions from which no G occurrences have been collected. 
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("There are no G points present so this process could not be completed.")
+0 = Native area (area of ecoregions within countries where taxon has been observed in the field)
+
+1 = area of potential distribution with ecoregions that have been collected for ex situ conservation
+
+Greater than 1 = area of potential distribution with ecoregions that have not been collected for ex situ conservation, identifying each ecoregion
+
+
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+
+if(length(include(csv,"eval_metrics.csv")) == 0){
+  print("Models were not produced for this taxon due to insufficent occurrences")
+}else{
+# extract values from ecoregion to predicted presences points
+thrs1 <- thrshold
+thrs1[thrs1 == 0] <- NA
+OccDataG <- cleanPoints[which(cleanPoints$type=="G"),c("longitude","latitude")]
+if(!1 %in% values(thrs1)){
+  print("There is no predicted area of presence for this species.")
+  ecoValsG <- NA
+  ecoVals <- NA
 }else{
   
-  occList <- cleanPoints[which(cleanPoints$type == "G"),]
-  if(nrow(occList) == 0){
-  print("There are no G points present so this process could not be completed.")
-  }else{ gPoint <- cleanPoints[cleanPoints@data$type == "G",]
-  palette1 <- c(  "#FFFFFF","#45B320","#7570b3")
-  if(length(gPoint@data)>0){
-    thes1 <- thrshold 
-    thes1[thes1==0]<-NA 
-    bufferInThres <- collgap1 * thes1
-    bufferInThres[is.na(bufferInThres)]<-0
-    comb2 <-  bufferInThres + thrshold
-    gGaps <- thrshold - bufferInThres 
-    writeRaster(x = gGaps, filename = paste0(sp_dir,'/gap_analysis/exsitu/gapMap.tif'),overwrite=TRUE)
-  tm_shape(comb2) + tm_raster(palette = palette1)+
-  tm_shape(gPoint) + tm_dots()+
-    tm_scale_bar()
+predictedPresence <- sp::SpatialPoints(raster::rasterToPoints(thrs1))
+raster::crs(predictedPresence) <- raster::crs(ecoReg)
+ecoVals <- sp::over(x = predictedPresence, y = ecoReg)
+ecoVals <- data.frame(ECO_ID_U=(unique(ecoVals$ECO_ID_U)))
+ecoVals <- ecoVals[which(!is.na(ecoVals) & ecoVals>0),]
+
+OccDataG <- cleanPoints[which(cleanPoints$type=="G"),c("longitude","latitude")]
+
+  # convert SDM from binary to 1-NA for mask and area
+  SdmMask <- thrshold
+  SdmMask[which(SdmMask[] == 0)] <- NA
+if(nrow(OccDataG)>0){
+  OccDataG <- OccDataG[which(!is.na(OccDataG$latitude)),]
+  sp::proj4string(OccDataG) <- sp::CRS("+proj=longlat +datum=WGS84")
+
+  # buffer G points
+  buffer <- GapAnalysis::Gbuffer(xy = OccDataG,
+                                     dist_m = 50000,
+                                     output = 'sf')
+  # rasterizing and making it into a mask
+  buffer_rs <- fasterize::fasterize(buffer, thrshold)
+  buffer_rs[!is.na(buffer_rs[])] <- 1
+  buffer_rs <- buffer_rs * SdmMask
+  # test for overlap between bugger and predicted areas 
+  if(1 %in% values(buffer_rs)){
+     gPoints <- sp::SpatialPoints(raster::rasterToPoints(buffer_rs))
+  # extract values from ecoregions to points
+  raster::crs(gPoints) <- raster::crs(ecoReg)
+  ecoValsG <- sp::over(x = gPoints, y = ecoReg)
+  ecoValsG <- data.frame(ECO_ID_U=(unique(ecoValsG$ECO_ID_U)))
+  ecoValsG <- ecoValsG[which(!is.na(ecoValsG) & ecoValsG>0),]
+  ecoGap <- ecoVals[!ecoVals %in% ecoValsG]
+  
+  if(length(ecoGap)!=0){
+    ### Standard Gap map  
+  # pull selected ecoregions and mask to presence area of the model
+  eco2 <- ecoReg[ecoReg$ECO_ID_U %in% ecoGap,]
+  #convert to sf object for conversion using fasterize
+  eco2a <- sf::st_as_sf(eco2, SdmMask)
+  # generate a ecoregion raster keeping the unique id.
+  eco3 <- fasterize::fasterize(eco2a, SdmMask, field = "ECO_ID_U")
+  # mask so only locations within the predicted presence area is included.
+  gap_map <- eco3 * SdmMask
+  if(length(ecoGap) > 30){
+          tm_shape(thrshold, name = "Native area and distribution model")+
+    tm_raster(palette = binaryPal, style = "cat",title = paste0("ERSex of ",species))+
+  tm_shape(gap_map, name = "Ecoregions not conserved ex situ") +
+    tm_raster(palette = ecoPal, style ="pretty", title = "Ecoregions not conserved ex situ") +
+    tm_shape(buffer_rs, name = "G buffer area")+
+    tm_raster(palette = proPal, title = "G Buffer", labels = "")
   }else{
-palette2 <- c(  "#FFFFFF","#45B320")
-tm_shape(collgap1) + tm_raster(palette=palette2)+
-    tm_scale_bar()
-    }
+      tm_shape(thrshold, name = "Native area and distribution model")+
+    tm_raster(palette = binaryPal, style = "cat",title = paste0("ERSex of ",species))+
+  tm_shape(gap_map, name = "Ecoregions not conserved ex situ") +
+    tm_raster(palette = ecoPal, style ="cat", title = "Ecoregions not conserved ex situ") +
+    tm_shape(buffer_rs, name = "G buffer area")+
+    tm_raster(palette = proPal, title = "G Buffer", labels = "")
   }
+
+  }else{
+    ### All regions conserved 
+    # pull selected ecoregions and mask to presence area of the model
+  eco2 <- ecoReg[ecoReg$ECO_ID_U %in% ecoVals,]
+  #convert to sf object for conversion using fasterize
+  eco2a <- sf::st_as_sf(eco2, SdmMask)
+  # generate a ecoregion raster keeping the unique id.
+  eco3 <- fasterize::fasterize(eco2a, SdmMask, field = "ECO_ID_U")
+  # mask so only locations within the predicted presence area is included.
+  gap_map <- eco3 * SdmMask
+  
+  tm_shape(thrshold, name = "Native area and distribution model")+
+    tm_raster(palette = binaryPal, style = "cat",title = paste0("ERSex of ",species))+
+  tm_shape(buffer_rs, name = "G buffer area")+
+    tm_raster(palette = proPal, title = "G Buffer", labels = "")
+  }
+
+  }else{
+    ### condition for when g occurrence is present but does not overlap with predicted presence 
+    ecoValsG <- NA
+     ecoGap <- ecoVals
+      # pull selected ecoregions and mask to presence area of the model
+      eco2 <- ecoReg[ecoReg$ECO_ID_U %in% ecoGap,]
+      #convert to sf object for conversion using fasterize
+      eco2a <- sf::st_as_sf(eco2, thrshold)
+      eco3 <- fasterize::fasterize(eco2a, thrshold, field = "ECO_ID_U")
+      gap_map <- eco3 * SdmMask
+
+      # mask so only locations within the predicted presence area is included.
+      if(length(unique(raster::values(gap_map)))< 30){
+        tm_shape(thrshold, name = "Native area and distribution model") + 
+          tm_raster(palette = binaryPal, style = "cat", title = paste0("ERSex for ",species))+
+        tm_shape(gap_map)+
+          tm_raster(palette = ecoPal, style = "cat", title = "Ecoregions not conserved ex situ")
+      }else{
+        tm_shape(thrshold, name = "Native area and distribution model") + 
+          tm_raster(palette = binaryPal, style = "cat", title = paste0("ERSex for ",species))+
+        tm_shape(gap_map)+
+          tm_raster(style = "pretty", title = "30 plus Ecoregions not conserved ex situ")
+      }
+  }
+  }else{
+      ecoValsG <- NA
+      ecoGap <- ecoVals
+      # pull selected ecoregions and mask to presence area of the model
+      eco2 <- ecoReg[ecoReg$ECO_ID_U %in% ecoGap,]
+      #convert to sf object for conversion using fasterize
+      eco2a <- sf::st_as_sf(eco2, thrshold)
+      eco3 <- fasterize::fasterize(eco2a, thrshold, field = "ECO_ID_U")
+      gap_map <- eco3 * SdmMask
+
+      # mask so only locations within the predicted presence area is included.
+      if(length(unique(raster::values(gap_map)))< 30){
+        tm_shape(thrshold, name = "Native area and distribution model") + 
+          tm_raster(palette = binaryPal, style = "cat", title = paste0("ERSex for ",species))+
+        tm_shape(gap_map)+
+          tm_raster(palette = ecoPal, style = "cat", title = "Ecoregions not conserved ex situ")
+      }else{
+        tm_shape(thrshold, name = "Native area and distribution model") + 
+          tm_raster(palette = binaryPal, style = "cat", title = paste0("ERSex for ",species))+
+        tm_shape(gap_map)+
+          tm_raster(style = "pretty", title = "30 plus Ecoregions not conserved ex situ")
+      }
+  }
+
+        # try(raster::writeRaster(x = gap_map,
+        #                       filename = paste0(sp_dir, "/gap_analysis/exsitu/",species,"_ersEx.tif"),overwrite = TRUE)) 
 }
+}        
+
 
 ```
-
 <br>
 <br>
+The table below shows the descriptions of the ecoregions within the potential distribution, with regard to ex situ conservation
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# show all ecoregions present in the modeling area 
+# define if they are conserved or not 
+if(length(include(csv,"eval_metrics.csv")) == 0){
+  print("Models were not produced for this taxon due to insufficent occurrences")
+}else{
+if(nrow(OccDataG)>0 & !is.na(ecoValsG)){
+  ecoVals <- sort(ecoVals)
+  allEco <- ecoReg@data[ecoReg@data$ECO_ID_U %in% ecoVals, ]
+  allEco$`Conserved Ex Situ` <- NA
+  for(i in 1:nrow(allEco)){
+    if(allEco$ECO_ID_U[i] %in% ecoValsG){
+      allEco$`Conserved Ex Situ`[i] <- "Conserved"
+    }else{
+      allEco$`Conserved Ex Situ`[i] <- "Not Conserved"
+    }
+  }
+
+}else{
+    try(allEco <- ecoReg@data[ecoReg@data$ECO_ID_U %in% ecoVals, ])
+    try(allEco$`Conserved Ex Situ` <- "Not Conserved")
+}
+
+
+try(allEco <- allEco %>% 
+  dplyr::select("ECO_ID_U", "ECO_NAME","Conserved Ex Situ", "WWF_MHTNAM" ,"SOURCEDATA"))
+}
+
+try(DT::datatable(allEco))
+```
+
+<br><br><br>
+<br>
 <br>
 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+try(allEco$species <- species)
+try(write.csv(x =allEco, paste0(sp_dir, "/gap_analysis/exsitu/ersExEcoregions.csv")))
+```
+
+#### In situ conservation
 
 
-#### In Situ Conservation
-
-
-The table below shows the in situ conservation summary.  SRSin reports the proportion of occurrences which fall within protected areas (WDPA database 2019). GRSin analyzes how comprehensively protected areas cover the maxent model spatially. ERSin analyzes how well protected areas cover the maxent model with regard to ecosystems covered. 
-All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = perfectly sufficient conservation. The final in situ conservation score is called FCSin and is a mean of the three in situ conservation scores.
+The table below shows the in situ conservation gap analysis summary.  The sampling representativeness score in situ (SRSin) calculates the proportion of all occurrences of a taxon within its predicted distribution that fall within a protected area. The geographical representativeness score in situ (GRSin) compares the area (in km2) of the distribution model located within protected areas versus the total area of the model. The ecological representativeness score in situ (ERSin) calculates the proportion of ecoregions encompassed within the range of the taxon located inside protected areas to the ecoregions encompassed within the total area of the distribution model. A final conservation score for in situ (FCSin) was derived by calculating the average of the three in situ conservation metrics.
+All of the conservation metrics are on a scale from 0-100, with 0 = poor conservation and 100 = comprehensive protection. The FCSin is used to categorize species, with urgent priority (UP) for further conservation action assigned when FCSin < 25, high priority (HP) where 25 ≤ FCSin < 50, medium priority (MP) where 50 ≤ FCSin < 75, and low priority (LP) for taxa whose FCSin ≥75.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # inSummary <- include(csv, "insitu/summary.csv")
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not able to be ran on this species due to insufficent number of samples")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
-tableIn <- dplyr::bind_cols(counts, read.csv(include(csv, "insitu/summary.csv")))
-tableIn <- tableIn[c(7,1,2,3,4,5,6,11,12,13,14)]
-names(tableIn) <- c("ID","Total Records","Total Useful","Total G Records",
-                    "Total G Useful","Total H Records","Total H Useful","SRSin",
-                    "GRSin","ERSin","FCSin")
+tableIn <- dplyr::bind_cols(c1a, read.csv(include(csv, "insitu/summary.csv")))
+
+
+
+tableIn <- tableIn[c(1,14,15,16,18,19,20,21,22,23, 24)]
+names(tableIn) <- c("Taxon","Total with coordinates","Total G  with coordinates","Total H with coordinates",
+                    "Total occurrences in modeled area",	"Total occurrences in modeled area in protected areas", "SRSin", "GRSin","ERSin","FCSin", "FCSin priority category")
+tableIn <- round_df(tableIn, digits = digits)
 DT::datatable(tableIn)
 }
 ```
@@ -342,56 +699,286 @@ DT::datatable(tableIn)
 <br>
 <br>
 
-#### GRSin
+#### Map of in situ sampling representativeness (SRSin) 
+The map below shows occurrences within the predicted distribution that are outside of protected areas. Values are summarized by count per cell. 
 
-Map of the potential distribution, with distribution occurring within existing protected areas (WDPA 2019) highlighted.
+Predicted Distribution = 0
 
-Areas of Native Range = 0
+1 and above = Number of cccurrences present at a location outside of a protected area
 
-Potential Distribution = 1
-
-Protected Lands within the Potential Distribution = 2
+Protected areas are displayed in purple
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not able to be ran on this species due to insufficent number of samples")
-}else{
-gapRaster2 <- proArea %>%
-  raster::crop(thrshold) %>%
-  raster::mask(thrshold)
+# if(length(include(csv,"eval_metrics.csv")) == 0){
+#   print("Models were not produced for this taxon due to insufficent occurrences")
+# }else{
+#   if(!1 %in% values(thrshold)){
+#   print("There is no predicted area of presence for this species.")
+# }else{
+# # select all points within SDM outstide of protected areas
+# gapP <- cleanPoints[is.na(raster::extract(x = proArea,y = cleanPoints)),]
+# if(nrow(gapP)==0){
+#   print("Occurreneces are within protected areas")
+#   
+# }else{
+# gapP<- sp::SpatialPoints(coords = gapP@coords)
+# gap_map <- raster::rasterize(x = gapP, field = rep(x = 1, length(gapP)),
+#                              y = thrshold, fun='count')
+# #palette3 <- c(  "#FFFFFF","#45B320","#7570b3")
+# gap_map[is.na(gap_map),] <- 0
+# t2 <- thrshold
+# t2[t2[]==0, ] <- NA
+# g2 <- gap_map * t2
+# p2 <- proArea %>%
+#   raster::crop(t2) %>%
+#   raster::mask(t2)
+# 
+# if(FALSE %in% unique(is.na(values(p2)))){
+#   if(species == "Helianthus winteri"){
+#        tm_shape(g2, name = "Density of occurrences not conserved in protected areas")+
+#   tm_raster(title ="Number of occurrences", style = "cont", palette = srsinPal)
+#   }else{
+#     tm_shape(g2, name = "Density of occurrences not conserved in protected areas")+
+#   tm_raster(title ="Number of occurrences", style = "cont", palette = srsinPal)+
+# tm_shape(p2, name = "Protected areas")+
+#   tm_raster(title = "Protected areas" , palette = proPal, labels = "")
+#   }
+# 
+# }else{
+#     tm_shape(g2, name = "Density of occurrences not conserved in protected areas")+
+#   tm_raster(title ="Number of occurrences", style = "cont", palette = srsinPal)
+#  }
+# }
+# }
+# }
+```
 
-      if(file.exists(include(tif, "spdist_thrsld_median"))){
-        gapRaster2[is.na(gapRaster2)] <- 0 
-        thres1 <- thrshold
-        thres1[thres1==0]<-NA
-        gapRaster2a <- gapRaster2 * thres1
-        gapRaster2a[is.na(gapRaster2a)]<-0
-        comb2a <- gapRaster2a + thrshold 
-        palette3 <- c(  "#FFFFFF","#45B320","#7570b3")
-tm_shape(comb2a) + tm_raster(palette = palette3)
-      }else{
-        print("Models were not able to be ran on this species due to insufficent number of samples")
-      }
-}
+<br>
+<br>
+<br>
+
+#### Map of in situ geographical representativeness (GRSin)
+
+The map below shows the potential distribution (threshold map), with distribution occurring within existing protected areas highlighted.
+
+0 = Native area (area of ecoregions within countries where taxon has been observed in the field)
+
+1 = Potential distribution
+
+2 = Protected areas within potential distribution
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# if(length(include(csv,"eval_metrics_rep.csv")) == 0){
+#   print("Models were not produced for this taxon due to insufficent occurrences")
+# }else{
+#   gapRaster2 <- proArea %>%
+#     raster::crop(thrshold)%>%
+#     raster::mask(thrshold) 
+# 
+#       if(file.exists(include(tif, "spdist_thrsld_median"))){
+#         gapRaster2[is.na(gapRaster2)] <- 0 
+#         thres1 <- thrshold
+#         thres1[thres1==0]<-NA
+#         gapRaster2a <- gapRaster2 * thres1
+#         gapRaster2a[is.na(gapRaster2a)]<-0
+#         comb2a <- gapRaster2a + thrshold 
+# map <- tm_shape(comb2a, name = "Native area, distribution model, and protected areas") +
+#   tm_raster(title = paste0("GRSin of ",species),palette = gBufPal, style = "cat")
+#       }else{
+#         print("Models were not produced for this taxon due to insufficent occurrences")
+#       }
+#   
+#     # clause for H. Winteri and possible others. Basically proarea exists but is generate out in tmap
+# issues <- c("Helianthus winteri")
+# if(species %in% issues){
+#   print("There is a visualization error that has prevented this map from displaying in an interactive format.")
+# }else{
+#   
+# map
+#   }
+# }
+# 
 
 ```
 <br>
 <br>
 <br>
 
-#### Combined Summary 
-This table shows the combined ex situ and in situ conservation metrics. FCSc-mean is the final combined conservation score. We categorize taxa based on the final combined scores (0-25 = high priority (HP) for further conservation work; 25-50 medium (MP); 50-75 low (LP); and 75-100 sufficiently conserved (SC)
+#### Map of in situ ecological representativeness (ERSin)
+
+The map below shows the potential distribution, highlighting ecoregions in which no protected areas are present. 
+
+0 = Native area (area of ecoregions within countries where taxon has been observed in the field)
+
+1 = area of potential distribution with ecoregions that have been conserved in protected areas
+
+Greater than 1 = area of potential distribution with ecoregions that have not been conserved in protected areas, identifying each ecoregion
+
+
+
+```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# if(length(include(csv,"eval_metrics.csv")) == 0){
+#   print("Models were not produced for this taxon due to insufficent occurrences")
+# }else{
+#     if(!1 %in% values(thrshold)){
+#   print("There is no predicted area of presence for this species.")
+#       ecoGap <- NULL
+# }else{
+#     #convert protect area to points
+#     t1<- thrshold
+#     t1[t1 ==0,] <-NA
+#     proArea2 <- proArea *t1
+#     if(FALSE %in% unique(is.na(values(proArea2)))){
+# 
+#     protectPoints <- sp::SpatialPoints(raster::rasterToPoints(proArea2))
+#     # extract the ecoReg values to the points
+#     raster::crs(protectPoints) <- raster::crs(ecoReg)
+#     ecoValsPro <- sp::over(x = protectPoints, y = ecoReg)
+#     ecoValsPro <- data.frame(ECO_ID_U=(unique(ecoValsPro$ECO_ID_U)))
+#     ecoValsPro <- ecoValsPro[which(!is.na(ecoValsPro) & ecoValsPro>0),]
+#     ecoInProt <- length(ecoValsPro)
+# 
+#     # extract ecoregions values present in predicted presence area
+#     predictedPresence <- sp::SpatialPoints(raster::rasterToPoints(t1))
+#     raster::crs(predictedPresence) <- raster::crs(ecoReg)
+#     ecoVal <- sp::over(x = predictedPresence, y = ecoReg)
+#     ecoVal <- data.frame(ECO_ID_U=(unique(ecoVal$ECO_ID_U)))
+#     ecoVal <- ecoVal[which(!is.na(ecoVal) & ecoVal>0),]
+# 
+#     ecoGap <- ecoVal[!ecoVal %in% ecoValsPro]
+# 
+#      # number of ecoRegions in modeling area
+#      SdmMask <-  thrshold
+#      SdmMask[which(SdmMask[]==0)] <- NA
+# 
+#       if(length(ecoGap) >0){
+#       ###Show ecoregions
+#       # pull selected ecoregions and mask to presence area of the model
+#       eco2 <- ecoReg[ecoReg$ECO_ID_U %in% ecoGap,]
+#       #convert to sf object for conversion using fasterize
+#       eco2a <- sf::st_as_sf(eco2, SdmMask)
+#       # generate a ecoregion raster keeping the unique id.
+#       eco3 <- fasterize::fasterize(eco2a, SdmMask, field = "ECO_ID_U")
+#       # mask so only locations within the predicted presence area is included.
+#       #eco3[is.na(eco3),] <- 0
+#       gap_map <- eco3 * SdmMask
+# 
+#       map<-tm_shape(thrshold, name = "Native area and distribution model") +
+#         tm_raster(palette = binaryPal, style = "cat",title = paste0("ERSin for ",species))+
+#         tm_shape(gap_map, name = "Ecoregions not conserved in protected areas")+
+#         tm_raster(palette = ecoPal, style = "cat", title = "Ecoregions not conserved in protected areas")+
+#       tm_shape(proArea2, name = "Protected Areas")+
+#         tm_raster(title = "Protected areas" , palette = proPal, labels = "")
+# 
+#     }else{
+# 
+#       map <- tm_shape(thrshold, name = "Native area and distribution model")+
+#         tm_raster(palette = binaryPal, style = "cat", title = paste0("ERSin of ", species))+
+#       tm_shape(proArea2, name = "Protected areas")+
+#         tm_raster(title = "Protected areas" , palette = proPal, labels = "")
+#     }
+#     }else{
+#       ### for species with no protected areas within the predicted presense range 
+#       # extract ecoregions values present in predicted presence area
+#     predictedPresence <- sp::SpatialPoints(raster::rasterToPoints(t1))
+#     raster::crs(predictedPresence) <- raster::crs(ecoReg)
+#     ecoVal <- sp::over(x = predictedPresence, y = ecoReg)
+#     ecoVal <- data.frame(ECO_ID_U=(unique(ecoVal$ECO_ID_U)))
+#     ecoVal <- ecoVal[which(!is.na(ecoVal) & ecoVal>0),]
+#     ecoGap <- ecoVal
+#     
+#      # number of ecoRegions in modeling area
+#      SdmMask <-  thrshold
+#      SdmMask[which(SdmMask[]==0)] <- NA
+# 
+#       ###Show ecoregions 
+#       # pull selected ecoregions and mask to presence area of the model
+#       eco2 <- ecoReg[ecoReg$ECO_ID_U %in% ecoVal,]
+#       #convert to sf object for conversion using fasterize
+#       eco2a <- sf::st_as_sf(eco2, SdmMask)
+#       # generate a ecoregion raster keeping the unique id.
+#       eco3 <- fasterize::fasterize(eco2a, SdmMask, field = "ECO_ID_U")
+#       # mask so only locations within the predicted presence area is included.
+#       #eco3[is.na(eco3),] <- 0
+#       gap_map <- eco3 * SdmMask
+#             map <- tm_shape(thrshold, name = "Native area and distribution model")+
+#         tm_raster(palette = binaryPal, style = "cat", title = paste0("ERSin of ", species))+
+#               tm_shape(gap_map, name = "Ecoregions not conserved in protected areas")+ 
+#         tm_raster(palette = ecoPal, style = "cat", title = "Ecoregions not conserved in protected areas")
+#     }
+# 
+#     # clause for H. Winteri and possible others. Basically proarea exists but is generate out in tmap
+# issues <- c("Helianthus winteri", "Elymus macgregorii", "Juglans nigra")
+# if(species %in% issues){
+#   print("There is a visualization error that has prevented this map from displaying in an interactive format.")
+# }else{
+# map
+# }
+# }
+#         # try(raster::writeRaster(x = gap_map,
+#         #                       filename = paste0(sp_dir, "/gap_analysis/insitu/",species,"_ersIn.tif"), overwrite = TRUE))
+# }
+# ```
+# <br>
+# <br>
+# The table below shows the descriptions of the ecoregions within the potential distribution, with regard to in situ conservation
+# ```{r  echo=FALSE, message=FALSE, warning=FALSE}
+# 
+# # show all ecoregions present in the modeling area 
+# # define if they are conserved or not 
+# if(length(include(csv,"eval_metrics.csv")) == 0){
+#   print("Models were not produced for this taxon due to insufficent occurrences")
+# }else{
+# if(length(ecoGap) >0){
+#   # needed to add this so relative positive held true 
+#   ecoVals <- sort(ecoVals)
+#   allEco <- ecoReg@data[ecoReg@data$ECO_ID_U %in% ecoVals, ]
+#   allEco$`Conserved Ex In Situ` <- NA
+#   for(i in 1:nrow(allEco)){
+#     if(allEco$ECO_ID_U[i] %in% ecoGap){
+#       allEco$`Conserved In Situ`[i] <- "Not Conserved"
+#     }else{
+#       allEco$`Conserved In Situ`[i] <- "Conserved"
+#     }
+#   }
+# }else{
+#     try(allEco <- ecoReg@data[ecoReg@data$ECO_ID_U %in% ecoVals, ])
+#     try(allEco$`Conserved In Situ` <- "Conserved")
+# }
+# 
+# 
+# 
+# try(allEco <- allEco %>% 
+#   dplyr::select("ECO_ID_U", "ECO_NAME","Conserved In Situ", "WWF_MHTNAM" ,"SOURCEDATA"))
+# 
+# try(DT::datatable(allEco))
+# }
+```
+<br>
+<br>
+<br>
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+try(allEco$species <- species)
+try(write.csv(x =allEco, paste0(sp_dir, "/gap_analysis/insitu/ersInEcoregions.csv")))
+```
+
+#### Combined conservation gap analysis 
+
+The table below shows the combined ex situ and in situ conservation gap analysis metrics. Minimum and maximum scores are identified, and a combined final conservation score (FCSc-mean) was calculated by averaging the final ex situ (FCSex) and in situ (FCSin) scores. The taxon is then categorized, with urgent priority (UP) for further conservation action assigned when FCS < 25, high priority (HP) where 25 ≤ FCS < 50, medium priority (MP) where 50 ≤ FCS < 75, and low priority (LP) for taxa whose FCS ≥75.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # inSummary <- include(csv, "insitu/summary.csv")
 if(length(include(csv,"eval_metrics_rep.csv")) == 0){
-  print("Models were not are to be ran on this species due to insufficent number of samples")
+  print("Models were not produced for this taxon due to insufficent occurrences")
 }else{
-  tableCo<- dplyr::bind_cols(counts, read.csv(include(csv, "combined/fcs_combined.csv")))
-  tableCo <- tableCo[c(7,1,2,3,4,5,6, 8,9,10,11,12,13,14,15)]
-  colnames(tableCo) <- c("Species", "Total Records", "Total Useful", "Total G Records", "Total G Useful", "Total H Records", "Total H Useful", "FCSex","FCSin"          
+  tableCo<- dplyr::bind_cols(c1a, read.csv(include(csv, "combined/fcs_combined.csv")))
+  
+  tableCo <- tableCo[c(1,14,15,16,18,19,20,21,22,23,24,25)]
+  colnames(tableCo) <- c("Taxon", "Total with coordinates", "Total G with coordinates", "Total H with coordinates", "FCSex","FCSin"          
 , "FCSc_min","FCSc_max","FCSc_mean"      
 ,"FCSc_min_class" , "FCSc_max_class","FCSc_mean_class")
+tableCo <- round_df(tableCo, digits = digits)
 DT::datatable(tableCo)
 }
 ```
@@ -399,5 +986,5 @@ DT::datatable(tableCo)
 <br>
 <br>
 
-This document was last last updated on `r Sys.Date()`
+This document was last updated on `r Sys.Date()`
 

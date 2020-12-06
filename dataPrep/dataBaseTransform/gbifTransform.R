@@ -10,13 +10,35 @@ library(readr)
 library(sqldf)
 library(MazamaSpatialUtils)
 #set base dir
-base_dir <- "D:/cwrNA/occurrence_data2019_05_29/GBIF"
+base_dir <- "F:/nrelD/cwrNA/occurrence_data2019_05_29/GBIF"
 
 # Load in data 
 header <- read.csv(paste0(base_dir,"/wetransfer-51b480/head.csv"), header = TRUE, fileEncoding = 'UTF-16',sep = '\t')
 
+# g2 <- data.table::fread(input = "F:/nrelD/cwrNA/occurrence_data2019_05_29/GBIF/occurrences_may2019.csv")
 
 csvPath <- paste0(base_dir,"/cleanGBIF20191119.csv")
+
+
+# ### attempting a join to get at the date information. 
+# dim(df2)
+# dim(g2)
+# vals <- as.numeric(df2$gbifID)
+# 
+# g2a <- g2[as.numeric(g2$V1) %in% vals,]
+# g2a$gbifID1 <- as.numeric(g2a$V1)
+# df2$gbifID1 <- vals
+# d3 <- dplyr::left_join(x = df2, y = g2a, by= "gbifID1")
+# 
+# d3a <- d3[!is.na(d3$decimalLatitude),]
+# 
+# d4 <- d3a %>%
+#   dplyr::group_by(V28)%>%
+#   dplyr::summarise(count = n())
+# 
+# View(d4)
+# 
+# write.csv(x = d4, file = paste0(base_dir,"/yearcount.csv"))
 
 # #old dataset 
 # csv2 <- paste0(base_dir,"/occurrences_may2019.csv")

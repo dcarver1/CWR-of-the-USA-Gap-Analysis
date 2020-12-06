@@ -229,7 +229,7 @@ df2 <- rbind(t1, t4)
 df3 <- df2 %>%
   dplyr::mutate(t0 = taxon)%>%
   tidyr::separate(col = t0,into = c("t1","t2", "t3","t4","t5","t6"),
-                       sep = " ")
+                  sep = " ")
 df3$genus <- df3$t1
 df4 <- df3[,18:22]
 # was assigning this to a column in a second dataframe and it was causeing quite a few issues. 

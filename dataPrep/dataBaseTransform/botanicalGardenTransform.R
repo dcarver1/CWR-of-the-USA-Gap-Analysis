@@ -10,7 +10,7 @@ library(naniar)
 library(reshape2)
 
 #set base dir
-base_dir <- "D:/cwrNA/occurrence_data2019_05_29/botanicalGarden"
+base_dir <- "F:/nrelD/cwrNA/occurrence_data2019_05_29/botanicalGarden"
 
 # Load in data 
 csvPath <- paste0(base_dir,"/P1ABC GRIN PlantSearch match ALL.csv")

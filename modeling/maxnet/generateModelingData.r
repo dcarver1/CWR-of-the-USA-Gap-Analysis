@@ -1,8 +1,9 @@
-### 
-# generate background points based on the size of the native area 
+###
+# generate background points based on the size of the native area
 # 20190904
-# carver.dan1@gmail.com
-### 
+# dan.carver@carverd.com
+###
+
 generateModelingData <- function(species){
   #function for checking area
   numberBackground <- function(area){
@@ -14,32 +15,32 @@ generateModelingData <- function(species){
     return(n)
   }
   n <- numberBackground(nativeArea)
-  
+
   # produce background points based on native area area
   bck_data <- spsample(nativeArea, n = n, type = "random" )
   crs(bck_data) <- crs(nativeArea)
   print(1)
-  # test so that background points do not overlap with presence points 
+  # test so that background points do not overlap with presence points
   # create the point buffer
-  # 1. buffer values from known presece locations by 0.000556 
+  # 1. buffer values from known presece locations by 0.000556
   presBuff <- rgeos::gBuffer(sp::SpatialPoints(cleanPoints@coords), width=0.000556) #width=0.000556
   crs(presBuff) <- crs(nativeArea)
-  # convert to spatial dataframe 
+  # convert to spatial dataframe
   print(2)
   # 2. run an intersect between buffer and background point
   intersect <- data.frame(over(bck_data, presBuff))
-  
+
   if(length(unique(intersect$over.bck_data..presBuff.))>1){
     nbd <- as.data.frame(bck_data@coords)
     nbd$intesect <- intersect
-    nbd <- nbd %>% 
+    nbd <- nbd %>%
       filter(is.na(intersect))
     bck_data <- sp::SpatialPoints(coords = c(nbd[,1:2]))
     crs(bck_data) <- crs(nativeArea)
   }
   print(3)
-  # 3. extract all values to background points 
-  rasterStack <- bioVars$as.RasterStack() %>% 
+  # 3. extract all values to background points
+  rasterStack <- bioVars %>%
     raster::crop(nativeArea)
   bck_vals <- raster::extract(x = rasterStack,y = bck_data)
   bck_data_bio <-as.data.frame(cbind(bck_data@coords, bck_vals))%>%
@@ -48,18 +49,15 @@ generateModelingData <- function(species){
   bck_data_bio$latitude <- bck_data_bio$y
   bck_data_bio <- bck_data_bio %>% dplyr::select(-c("x","y"))
   print(4)
-  # extract values to presence points 
+  # extract values to presence points
   prs_vals <- raster::extract(x = rasterStack,y = sp::SpatialPoints(cleanPoints@coords))
   print(4.1)
   prs_data_bio <- as.data.frame(cbind(prs_vals,cleanPoints@data[,2:3])) %>%
     mutate(presence = 1)
   print(5)
-  # merge presence and background sets 
+  # merge presence and background sets
   bioValues <<- dplyr::bind_rows(bck_data_bio,prs_data_bio)
-  
-  # need to find a list of the layer names for the raster and apply them before declaring this global
-  # variable and writing out the data. 
-  
+
   # write out csv of background/presence data
   write.csv(x = bioValues, file = paste0(sp_dir, "/occurrences/presBackgroundWithBiovars.csv"))
 }

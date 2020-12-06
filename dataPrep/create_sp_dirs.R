@@ -1,6 +1,8 @@
-# This function runs the entire process for a selected species
-# @param (chr) species: species ID
-# @return (dir): status of directory creation
+###
+# Test for existing file stucture and generates sturcture if needed.
+# dan.carver@carverd.com
+# 20200414
+###
 
 create_sp_dirs <- function(species) {
   #create species dir
