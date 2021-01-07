@@ -1,6 +1,6 @@
-# cwrNA
+# Crop Wild Relative of the USA
 
-## Code base for "Crop wild relatives of the United States require urgent conservation action"
+## Code base for "[Crop wild relatives of the United States require urgent conservation action](https://www.pnas.org/content/117/52/33351)"
 
 ## Primary Authors : Colin Khoury, Dan Carver
 
