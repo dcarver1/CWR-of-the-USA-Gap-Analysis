@@ -1,5 +1,8 @@
 # Crop Wild Relative of the USA
 
+**Note:** as of 05-2023 this codebase is being redeveloped for the [Conservation of Wild Grapes](https://github.com/dcarver1/cwr_wildgrapes) project. This redevelopment includes some significant updates to the code base, namely, the transistion from `SP` to `SF` and `raster` to `terra`. Conceptual the metrics and the modeling process are not being significantly altered. Please consider utilizing the Wild Grapes project repository if you are interested in engaing with this code base. 
+
+
 ## Code base for "[Crop wild relatives of the United States require urgent conservation action](https://www.pnas.org/content/117/52/33351)"
 
 ## Primary Authors : Colin Khoury, Dan Carver
